@@ -9,31 +9,24 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
-//IMux 路由
-type IMux interface {
-	Vars(*http.Request) map[string]string
-	WarpHandleFunc(string, string, func(http.ResponseWriter, *http.Request))
-	PathPrefix(string)
-	Handler() http.Handler
-}
+type HTTPGroup = []func(*HTTPContext)
 
 //HTTPContext 上下文
 type HTTPContext struct {
-	index   *int
-	chain   []func(HTTPContext)
-	do      func(HTTPContext)
+	index   int
+	chain   HTTPGroup
 	Vars    map[string]string
 	Writer  http.ResponseWriter
 	Request *http.Request
-	//validator
-	Verify func(any, string) error
-	Struct func(any) error
+	route   *WRoute
 }
 
 //Params 请求参数
-func (c HTTPContext) Params(s string) string {
+func (c *HTTPContext) Params(s string) string {
 	if v, ok := c.Vars[s]; ok {
 		return v
 	}
@@ -41,7 +34,7 @@ func (c HTTPContext) Params(s string) string {
 }
 
 //BindJSON 绑定JSON数据
-func (c HTTPContext) BindJSON(v any) error {
+func (c *HTTPContext) BindJSON(v any) error {
 	buf, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
 		return fmt.Errorf("readAll faile: %w", err)
@@ -50,7 +43,7 @@ func (c HTTPContext) BindJSON(v any) error {
 	if err != nil {
 		return fmt.Errorf("unmarshal %v faile: %w", v, err)
 	}
-	err = c.Struct(v)
+	err = c.route.validatorStruct(v)
 	if err != nil {
 		return fmt.Errorf("validator %v faile: %w", v, err)
 	}
@@ -58,13 +51,13 @@ func (c HTTPContext) BindJSON(v any) error {
 }
 
 //String 带有状态码的纯文本响应
-func (c HTTPContext) String(status int, msg string) {
+func (c *HTTPContext) String(status int, msg string) {
 	c.Writer.WriteHeader(status)
 	io.WriteString(c.Writer, msg)
 }
 
 //JSON 带有状态码的JSON 数据
-func (c HTTPContext) JSON(status int, v any) {
+func (c *HTTPContext) JSON(status int, v any) {
 	d, err := json.Marshal(v)
 	if err != nil {
 		c.String(http.StatusInternalServerError, err.Error())
@@ -76,36 +69,27 @@ func (c HTTPContext) JSON(status int, v any) {
 }
 
 //Next 下一个
-func (c HTTPContext) Next() {
-	*c.index++
-	if *c.index >= len(c.chain) {
-		c.do(c)
-	} else {
-		c.chain[*c.index](c)
-	}
+func (c *HTTPContext) Next() {
+	c.index++
+	c.chain[c.index](c)
 }
 
 //WRoute w
 type WRoute struct {
-	muxVars           func(*http.Request) map[string]string
-	muxWarpHandleFunc func(string, string, func(http.ResponseWriter, *http.Request))
-	muxPathPrefix     func(string)
-	muxHandler        func() http.Handler
-	validatorVar      func(any, string) error
-	validatorStruct   func(any) error
-	DebugMode         bool
+	//mux
+	router *mux.Router
+	//validator
+	validatorVar    func(any, string) error
+	validatorStruct func(any) error
+	//logger
+	logger    ILogger
+	DebugMode bool
 }
 
 //NewRoute 新建
 func NewRoute(ops *Options) *WRoute {
-	r := &WRoute{}
-	if ops.Mux == nil {
-		panic("Mux is nil")
-	}
-	r.muxVars = ops.Mux.Vars
-	r.muxWarpHandleFunc = ops.Mux.WarpHandleFunc
-	r.muxPathPrefix = ops.Mux.PathPrefix
-	r.muxHandler = ops.Mux.Handler
+	r := WRoute{}
+	r.router = mux.NewRouter()
 	if ops.Validator == nil {
 		panic("Validator is nil")
 	}
@@ -114,78 +98,65 @@ func NewRoute(ops *Options) *WRoute {
 	if ops.Logger == nil {
 		panic("Logger is nil")
 	}
-	defaultHTTPLogger = ops.Logger
-	return r
+	r.logger = ops.Logger
+	return &r
 }
 
 //PathPrefix 前缀
 func (r *WRoute) PathPrefix(tpl string) {
-	r.muxPathPrefix(tpl)
+	r.router.PathPrefix(tpl).Handler(http.DefaultServeMux)
 }
 
 //HandleFunc 处理
 func (r *WRoute) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	r.muxWarpHandleFunc("GET", pattern, handler)
-}
-
-//API a
-func (r *WRoute) API(g []func(HTTPContext), url string, fn func(any) (any, error)) {
-	// TODO
+	r.router.HandleFunc(pattern, handler).Methods("GET")
 }
 
 //GET g
-func (r *WRoute) GET(g []func(HTTPContext), url string, fn func(HTTPContext)) {
-	r.muxWarpHandleFunc("GET", url, r.Warp(g, fn))
+func (r *WRoute) GET(g HTTPGroup, url string, fn func(*HTTPContext)) {
+	r.router.HandleFunc(url, r.Warp(g, fn)).Methods("GET")
 }
 
 //POST p
-func (r *WRoute) POST(g []func(HTTPContext), url string, fn func(HTTPContext)) {
-	r.muxWarpHandleFunc("POST", url, r.Warp(g, fn))
+func (r *WRoute) POST(g HTTPGroup, url string, fn func(*HTTPContext)) {
+	r.router.HandleFunc(url, r.Warp(g, fn)).Methods("POST")
 }
 
 //DELETE d
-func (r *WRoute) DELETE(g []func(HTTPContext), url string, fn func(HTTPContext)) {
-	r.muxWarpHandleFunc("DELETE", url, r.Warp(g, fn))
+func (r *WRoute) DELETE(g HTTPGroup, url string, fn func(*HTTPContext)) {
+	r.router.HandleFunc(url, r.Warp(g, fn)).Methods("DELETE")
 }
 
 //Warp 封装
-func (r *WRoute) Warp(g []func(HTTPContext), fn func(HTTPContext)) func(http.ResponseWriter, *http.Request) {
+func (r *WRoute) Warp(g HTTPGroup, fn func(*HTTPContext)) func(http.ResponseWriter, *http.Request) {
+	chain := make(HTTPGroup, len(g)+1)
+	copy(chain, g)
+	chain[len(g)] = fn
 	return func(rw http.ResponseWriter, req *http.Request) {
 		defer func() {
 			if v := recover(); v != nil {
 				buf := make([]byte, 4096)
 				lenght := runtime.Stack(buf, false)
-				defaultHTTPLogger.Error(fmt.Sprintf("WRoute.warp %v \n%s", v, buf[:lenght]))
+				r.logger.Error(fmt.Sprintf("WRoute.warp %v \n%s", v, buf[:lenght]))
 				if r.DebugMode {
 					rw.Write([]byte("\n"))
 					rw.Write(buf[:lenght])
 				}
 			}
 		}()
-		var index int
-		c := HTTPContext{index: &index, chain: g, do: fn, Writer: rw, Request: req, Verify: r.validatorVar, Struct: r.validatorStruct}
-		c.Vars = r.muxVars(req)
-		if len(g) > 0 {
-			c.chain[0](c)
-		} else {
-			fn(c)
-		}
+		c := &HTTPContext{chain: chain, Writer: rw, Request: req, route: r}
+		c.Vars = mux.Vars(req)
+		c.chain[0](c)
 	}
 }
 
-//Middleware 使用中间件
-func Middleware(m ...func(HTTPContext)) []func(HTTPContext) {
+//HTTPMiddleware 中间件
+func HTTPMiddleware(m ...func(*HTTPContext)) HTTPGroup {
 	return m
 }
 
-//AppendValidator 追加
-func AppendValidator(base []func(HTTPContext), a ...string) []func(HTTPContext) {
-	g := append(base, ValidatorMiddleware(a...))
-	return g
-}
-
 //ValidatorMiddleware 输入参数验证
-func ValidatorMiddleware(a ...string) func(HTTPContext) {
+func ValidatorMiddleware(a ...string) func(*HTTPContext) {
 	var s0, s1 []string
 	for _, v := range a {
 		s := strings.Split(v, ":")
@@ -195,9 +166,9 @@ func ValidatorMiddleware(a ...string) func(HTTPContext) {
 		s0 = append(s0, s[0])
 		s1 = append(s1, s[1])
 	}
-	return func(c HTTPContext) {
+	return func(c *HTTPContext) {
 		for i := range s0 {
-			if err := c.Verify(c.Params(s0[i]), s1[i]); err != nil {
+			if err := c.route.validatorVar(c.Params(s0[i]), s1[i]); err != nil {
 				c.String(http.StatusBadRequest, fmt.Sprintf("validate %s %s faile: %s", s0[i], s1[i], err.Error()))
 				return
 			}
@@ -206,31 +177,31 @@ func ValidatorMiddleware(a ...string) func(HTTPContext) {
 	}
 }
 
-var defaultHTTPLogger ILogger
+var formatLogger string = "| %13d | %15s | %5d | %7s | %s | %s "
 
 //LoggerMiddleware 日志
-func LoggerMiddleware() func(HTTPContext) {
+func LoggerMiddleware() func(*HTTPContext) {
 	var startTime time.Time
-	var rw HTTPLoggerResponseWriter
-	return func(c HTTPContext) {
+	var rw httpLoggerResponseWriter
+	return func(c *HTTPContext) {
 		startTime = time.Now()
 		rw.w = c.Writer
 		c.Writer = &rw
 		c.Next()
 		if rw.status > 299 {
 			if rw.err != nil {
-				defaultHTTPLogger.Error(fmt.Sprintf("| %13v | %15s | %5d | %7s | %s | %s ", time.Since(startTime), c.Request.RemoteAddr, rw.status, c.Request.Method, c.Request.URL, rw.err.Error()))
+				c.route.logger.Error(fmt.Sprintf(formatLogger, time.Since(startTime), c.Request.RemoteAddr, rw.status, c.Request.Method, c.Request.URL, rw.err.Error()))
 			} else {
-				defaultHTTPLogger.Warn(fmt.Sprintf("| %13v | %15s | %5d | %7s | %s | %s ", time.Since(startTime), c.Request.RemoteAddr, rw.status, c.Request.Method, c.Request.URL, rw.result))
+				c.route.logger.Warn(fmt.Sprintf(formatLogger, time.Since(startTime), c.Request.RemoteAddr, rw.status, c.Request.Method, c.Request.URL, rw.result))
 			}
 		} else {
-			defaultHTTPLogger.Debug(fmt.Sprintf("| %13v | %15s | %5d | %7s | %s | %s ", time.Since(startTime), c.Request.RemoteAddr, rw.status, c.Request.Method, c.Request.URL, rw.result))
+			c.route.logger.Debug(fmt.Sprintf(formatLogger, time.Since(startTime), c.Request.RemoteAddr, rw.status, c.Request.Method, c.Request.URL, rw.result))
 		}
 	}
 }
 
-//HTTPLoggerResponseWriter d
-type HTTPLoggerResponseWriter struct {
+//httpLoggerResponseWriter d
+type httpLoggerResponseWriter struct {
 	status int
 	result []byte
 	err    error
@@ -238,18 +209,18 @@ type HTTPLoggerResponseWriter struct {
 }
 
 //Header 返回一个Header类型值
-func (h *HTTPLoggerResponseWriter) Header() http.Header {
+func (h *httpLoggerResponseWriter) Header() http.Header {
 	return h.w.Header()
 }
 
 //WriteHeader 该方法发送HTTP回复的头域和状态码
-func (h *HTTPLoggerResponseWriter) WriteHeader(s int) {
+func (h *httpLoggerResponseWriter) WriteHeader(s int) {
 	h.status = s
 	h.w.WriteHeader(s)
 }
 
 //Write 向连接中写入作为HTTP的一部分回复的数据
-func (h *HTTPLoggerResponseWriter) Write(d []byte) (int, error) {
+func (h *httpLoggerResponseWriter) Write(d []byte) (int, error) {
 	n, err := h.w.Write(d)
 	h.result = d
 	h.err = err

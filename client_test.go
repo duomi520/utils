@@ -64,14 +64,13 @@ func TestClientGo(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	var reply string
-	response := RPCResponseGet()
-	err = client.Go(context.TODO(), "hi.SayHello", "linda", &reply, response)
+	done := make(chan struct{})
+	err = client.Go(context.TODO(), "hi.SayHello", "linda", &reply, done)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	<-response.Done
-	RPCResponsePut(response)
+	<-done
 	if !strings.EqualFold(reply, "Hello linda") {
-		t.Fatal(response)
+		t.Fatal(reply)
 	}
 }

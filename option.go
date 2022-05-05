@@ -12,7 +12,6 @@ type Options struct {
 	snowFlakeID *SnowFlakeID
 	Marshal     func(any) ([]byte, error)
 	Unmarshal   func([]byte, any) error
-	Mux         IMux
 	Validator   IValidator
 	//熔断器
 	Breaker IBreaker
@@ -37,13 +36,6 @@ func NewOptions(opts ...Option) *Options {
 		v(&o)
 	}
 	return &o
-}
-
-//WithMux 路由
-func WithMux(m IMux) Option {
-	return func(o *Options) {
-		o.Mux = m
-	}
 }
 
 //WithValidator 验证
