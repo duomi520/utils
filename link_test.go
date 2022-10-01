@@ -26,6 +26,6 @@ func BenchmarkTimeNow(b *testing.B) {
 
 func BenchmarkRuntimeNanotime(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = nanotime1()
+		_ = Nanotime()
 	}
 }
