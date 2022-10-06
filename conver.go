@@ -1,18 +1,27 @@
 package utils
 
 import (
+	"reflect"
 	"unsafe"
 )
 
 //StringToBytes String转Bytes 转后不要修改Bytes
-func StringToBytes(s string) []byte {
-	x := (*[2]uintptr)(unsafe.Pointer(&s))
-	h := [3]uintptr{x[0], x[1], x[1]}
-	return *(*[]byte)(unsafe.Pointer(&h))
+//
+//后续go版本无法预测不变
+func StringToBytes(s string) (b []byte) {
+	/* #nosec G103 */
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	/* #nosec G103 */
+	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	bh.Data, bh.Len, bh.Cap = sh.Data, sh.Len, sh.Len
+	return b
 }
 
 //BytesToString Bytes转String 转后不要修改Bytes
+//
+//后续go版本无法预测不变
 func BytesToString(b []byte) string {
+	/* #nosec G103 */
 	return *(*string)(unsafe.Pointer(&b))
 }
 
@@ -31,24 +40,6 @@ func IntegerEqual[T Integer](a, b []T) bool {
 		}
 	}
 	return true
-}
-
-//DIGITS 数字串
-var DIGITS = [10]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}
-
-//UItoa 非负整数转String
-func UItoa[T uint | uint8 | uint16 | uint32 | uint64](d T) string {
-	if d == 0 {
-		return "0"
-	}
-	var b [20]byte
-	n := 0
-	for j := 19; j >= 0 && d > 0; j-- {
-		b[j] = DIGITS[d%10]
-		d /= 10
-		n++
-	}
-	return string(b[20-n:])
 }
 
 type Integer16 interface {
