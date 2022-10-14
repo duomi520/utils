@@ -41,8 +41,8 @@ func TestDictCode(t *testing.T) {
 		d.Set(testKey[i], testValue[i])
 	}
 	buf := make([]byte, 256)
-	n := d.Encode(buf)
-	m.Decode(buf[:n])
+	data := d.Encode(buf)
+	m.Decode(data)
 	if m.Len() != 10 {
 		t.Error(m)
 	}

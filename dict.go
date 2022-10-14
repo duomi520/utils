@@ -61,20 +61,27 @@ func (d *MetaDict) Del(key string) {
 +-------+-------+-------+-------+-------+-------+
 */
 
-//Encode 编码
-func (d *MetaDict) Encode(b []byte) int {
+//Encode 编码 使用src，如果太小，扩容
+func (d *MetaDict) Encode(src []byte) (dst []byte) {
 	index := 0
 	for i := 0; i < d.lenght; i++ {
-		b[index] = byte(len(d.key[i]))
+		need:=2+len(d.key[i])+len(d.value[i])
+		//src 太小扩容
+		if len(src)<(index+need){
+			buf:=make([]byte,len(src)*2+need)
+			copy(buf[:index],src[:index])
+			src=buf
+		}
+		src[index] = byte(len(d.key[i]))
 		index++
-		copy(b[index:], StringToBytes(d.key[i]))
+		copy(src[index:], StringToBytes(d.key[i]))
 		index = index + len(d.key[i])
-		b[index] = byte(len(d.value[i]))
+		src[index] = byte(len(d.value[i]))
 		index++
-		copy(b[index:], StringToBytes(d.value[i]))
+		copy(src[index:], StringToBytes(d.value[i]))
 		index = index + len(d.value[i])
 	}
-	return index
+	return src[:index]
 }
 
 //Decode 解码
