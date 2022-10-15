@@ -17,6 +17,11 @@ func (d *MetaDict) Len() int {
 	return d.lenght
 }
 
+//GetAll
+func (d *MetaDict) GetAll() ([]string, []string) {
+	return d.key, d.value
+}
+
 //Set
 func (d *MetaDict) Set(key, value string) {
 	for i := 0; i < d.lenght; i++ {
