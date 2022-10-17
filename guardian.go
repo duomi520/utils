@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"time"
@@ -9,7 +8,6 @@ import (
 
 //Guardian 定时任务协程
 type Guardian struct {
-	ctx    context.Context
 	Period time.Duration
 	//返回true 退出定时任务
 	addChan   chan func() bool
@@ -18,14 +16,12 @@ type Guardian struct {
 }
 
 //NewGuardian 新建
-func NewGuardian(ctx context.Context) *Guardian {
+func NewGuardian(period time.Duration) *Guardian {
 	var g = Guardian{
-		ctx:      ctx,
-		Period:   5 * time.Second,
+		Period:   period,
 		addChan:  make(chan func() bool, 16),
 		stopChan: make(chan struct{}),
 	}
-	go g.Run()
 	return &g
 }
 
@@ -71,8 +67,6 @@ func (g *Guardian) Run() {
 			chain = chain[:lenght]
 		case f := <-g.addChan:
 			chain = append(chain, f)
-		case <-g.ctx.Done():
-			return
 		case <-g.stopChan:
 			return
 		}
