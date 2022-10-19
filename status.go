@@ -7,6 +7,7 @@ const (
 	StatusPing
 	StatusPong
 	StatusGoaway
+	StatusHijacker
 	StatusRequest
 	StatusResponse
 	StatusSubscribe
@@ -27,6 +28,7 @@ const (
 	StatusPing16
 	StatusPong16
 	StatusGoaway16
+	StatusHijacker16
 	StatusRequest16
 	StatusResponse16
 	StatusSubscribe16
