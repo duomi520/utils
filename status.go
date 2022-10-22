@@ -10,15 +10,16 @@ const (
 	StatusHijacker
 	StatusRequest
 	StatusResponse
+	StatusCtxCancelFunc
 	StatusSubscribe
 	StatusUnsubscribe
 	StatusStream
 	StatusBroadcast
 	StatusError
 	StatusEvent
-	StateBreakerClosed
-	StateBreakerOpen
-	StateBreakerHalfOpen
+	StatusBreakerClosed
+	StatusBreakerOpen
+	StatusBreakerHalfOpen
 )
 
 //状态码
@@ -31,15 +32,16 @@ const (
 	StatusHijacker16
 	StatusRequest16
 	StatusResponse16
+	StatusCtxCancelFunc16
 	StatusSubscribe16
 	StatusUnsubscribe16
 	StatusStream16
 	StatusBroadcast16
 	StatusError16
 	StatusEvent16
-	StateBreakerClosed16
-	StateBreakerOpen16
-	StateBreakerHalfOpen16
+	StatusBreakerClosed16
+	StatusBreakerOpen16
+	StatusBreakerHalfOpen16
 )
 
 // HTTP状态码，参见RFC 2616
