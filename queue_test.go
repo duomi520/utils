@@ -12,8 +12,8 @@ type lockListTemp struct {
 func (l lockListTemp) equal(obj any) bool {
 	return l.i == obj.(lockListTemp).i
 }
-func TestLockList(t *testing.T) {
-	l := NewLockList()
+func TestCopyOnWriteList(t *testing.T) {
+	l := NewCopyOnWriteList()
 	for i := 0; i < 10; i++ {
 		l.Add(lockListTemp{i})
 	}
@@ -40,8 +40,8 @@ func TestLockList(t *testing.T) {
 		}
 	}
 }
-func BenchmarkList(b *testing.B) {
-	l := NewLockList()
+func BenchmarkCopyOnWriteList(b *testing.B) {
+	l := NewCopyOnWriteList()
 	for i := 0; i < 10; i++ {
 		l.Add(lockListTemp{i})
 	}

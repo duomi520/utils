@@ -5,24 +5,24 @@ import (
 	"sync/atomic"
 )
 
-//LockList 加锁读写数组，适用不频繁写的场景
+//CopyOnWriteList (COW)需要修改的时候拷贝一个副本出来，适用不频繁写的场景
 //修改时新数据原子替换旧数据地址，旧数据由GC回收。
-type LockList struct {
+type CopyOnWriteList struct {
 	//0-unlock 1-lock
 	mutex int64
 	slice atomic.Value
 }
 
-//NewLockList 新
-func NewLockList() *LockList {
-	l := LockList{}
+//NewCopyOnWriteList 新增
+func NewCopyOnWriteList() *CopyOnWriteList {
+	l := CopyOnWriteList{}
 	var data []any
 	l.slice.Store(data)
 	return &l
 }
 
 //Add 增加
-func (l *LockList) Add(element any) {
+func (l *CopyOnWriteList) Add(element any) {
 	for {
 		if atomic.CompareAndSwapInt64(&l.mutex, 0, 1) {
 			base := l.slice.Load().([]any)
@@ -39,7 +39,7 @@ func (l *LockList) Add(element any) {
 }
 
 //Remove 移除
-func (l *LockList) Remove(judge func(any) bool) {
+func (l *CopyOnWriteList) Remove(judge func(any) bool) {
 	for {
 		if atomic.CompareAndSwapInt64(&l.mutex, 0, 1) {
 			base := l.slice.Load().([]any)
@@ -59,9 +59,10 @@ func (l *LockList) Remove(judge func(any) bool) {
 }
 
 //List 列
-func (l *LockList) List() []any {
+func (l *CopyOnWriteList) List() []any {
 	return l.slice.Load().([]any)
 }
 
 // https://github.com/yireyun/go-queue
 // https://github.com/Workiva/go-datastructures
+// https://www.jianshu.com/p/231caf90f30b

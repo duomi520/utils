@@ -38,10 +38,10 @@ const (
 )
 
 //ErrWLoggerCrash 日志崩溃
-var ErrWLoggerCrash = errors.New("utils.Logger.Write|crash")
+var ErrWLoggerCrash = errors.New("Logger.Write：crash")
 
 //ErrWLoggerUndefinedLevel 未定义等级
-var ErrWLoggerUndefinedLevel = errors.New("utils.Logger.NewWLogger|undefined Logger level")
+var ErrWLoggerUndefinedLevel = errors.New("Logger.NewWLogger：undefined Logger level")
 
 //LevelName 等级名称
 var LevelName = []string{"[?????]", "[Debug]", "[Info ]", "[Warn ]", "[Error]", "[Fatal]", "[Crash]"}
@@ -63,12 +63,12 @@ func (f *fileWrite) Write(b []byte) (n int, err error) {
 			f.count = 0
 			//关闭现有文件
 			if err := f.fd.Close(); err != nil {
-				log.Printf("fileWrite.Write:close faile, %s\n", err.Error())
+				log.Printf("fileWrite.Write：close faile, %s\n", err.Error())
 				return size, ErrWLoggerCrash
 			}
 			//新建文件
 			if err := f.createFile(); err != nil {
-				log.Printf("fileWrite.Write:create file faile, %s\n", err.Error())
+				log.Printf("fileWrite.Write：create file faile, %s\n", err.Error())
 				return size, ErrWLoggerCrash
 			}
 			//遍历文件数
@@ -84,7 +84,7 @@ func (f *fileWrite) Write(b []byte) (n int, err error) {
 				name := fi.Name()
 				c, err := strconv.Atoi(name[:len(name)-4])
 				if err != nil {
-					log.Printf("fileWrite.Write:name format error, %s, %s\n", name, err.Error())
+					log.Printf("fileWrite.Write：name format error, %s, %s\n", name, err.Error())
 				}
 				lm = append(lm, c)
 				return nil
@@ -96,7 +96,7 @@ func (f *fileWrite) Write(b []byte) (n int, err error) {
 					name := fmt.Sprintf("./%s/%d.log", f.path, v)
 					err := os.Remove(name)
 					if err != nil {
-						log.Printf("fileWrite.Write:remove failed, %s, %s\n", name, err.Error())
+						log.Printf("fileWrite.Write：remove failed, %s, %s\n", name, err.Error())
 					}
 				}
 			}
@@ -196,7 +196,7 @@ func (logger *WLogger) doPrint(level int, a ...string) {
 	if _, err := b.WriteTo(logger.out); err != nil {
 		//日志崩溃,禁止写入
 		logger.level = CrashLevel
-		log.Printf("WLogger.doPrint:WriteTo faile, %s\n", err.Error())
+		log.Printf("WLogger.doPrint：WriteTo faile, %s\n", err.Error())
 	}
 	logger.mu.Unlock()
 	b.Reset()

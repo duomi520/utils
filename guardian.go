@@ -2,26 +2,60 @@ package utils
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
 
-//Guardian 定时任务协程
+//Guardian 批量处理定时任务协程
 type Guardian struct {
-	Period time.Duration
-	//返回true 退出定时任务
-	addChan   chan func() bool
+	Period    int64
+	lock      sync.Mutex
+	chain     []func() bool
 	closeOnce sync.Once
 	stopChan  chan struct{}
+	logger    ILogger
 }
 
-//NewGuardian 新建
-func NewGuardian(period time.Duration) *Guardian {
+//NewGuardian 新建批量处理定时器
+func NewGuardian(period time.Duration, l ILogger) *Guardian {
 	var g = Guardian{
-		Period:   period,
-		addChan:  make(chan func() bool, 16),
+		Period:   int64(period),
 		stopChan: make(chan struct{}),
+		logger:   l,
 	}
+	go func() {
+		g.logger.Debug("NewGuardian: 启用定时器")
+		for {
+			select {
+			case <-g.stopChan:
+				g.logger.Debug("NewGuardian: 定时器关闭")
+				return
+			default:
+				i := 0
+				start := Nanotime()
+				g.lock.Lock()
+				lenght := len(g.chain)
+				for i < lenght {
+					if g.chain[i]() {
+						if i < (lenght - 1) {
+							copy(g.chain[i:], g.chain[i+1:])
+						}
+						lenght--
+						g.chain = g.chain[:lenght]
+					}
+					i++
+				}
+				g.lock.Unlock()
+				since := Nanotime() - start
+				if since < g.Period {
+					time.Sleep(time.Duration(g.Period - since))
+				} else {
+					g.logger.Warn(fmt.Sprintf("NewGuardian：运行任务耗时 %d 超过设定周期 %d ", since, g.Period))
+				}
+			}
+		}
+	}()
 	return &g
 }
 
@@ -32,44 +66,15 @@ func (g *Guardian) Release() {
 	})
 }
 
-//AddJob 加入
+//AddJob 加入定时任务，任务返回true 任务将退出定时运行，任务不可长时间阻塞
 func (g *Guardian) AddJob(f func() bool) error {
 	select {
-	case g.addChan <- f:
+	case <-g.stopChan:
+		return errors.New("Guardian.AddJob：定时器已关闭")
 	default:
-		return errors.New("Guardian 加入任务失败")
+		g.lock.Lock()
+		g.chain = append(g.chain, f)
+		g.lock.Unlock()
 	}
 	return nil
-}
-
-//Run 协程
-func (g *Guardian) Run() {
-	ticker := time.NewTicker(g.Period)
-	var chain []func() bool
-	defer func() {
-		ticker.Stop()
-		g.Release()
-	}()
-	for {
-		select {
-		case <-ticker.C:
-			i := 0
-			lenght := len(chain)
-			for i < lenght {
-				if chain[i]() {
-					if i < (lenght - 1) {
-						copy(chain[i:], chain[i+1:])
-					}
-					lenght--
-				}
-				i++
-			}
-			chain = chain[:lenght]
-		case f := <-g.addChan:
-			chain = append(chain, f)
-		case <-g.stopChan:
-			return
-		}
-	}
-
 }

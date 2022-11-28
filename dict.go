@@ -73,7 +73,7 @@ func (d *MetaDict) Encode(src []byte) (int, error) {
 	for i := 0; i < d.lenght; i++ {
 		need := 2 + len(d.key[i]) + len(d.value[i])
 		if len(src) < (index + need) {
-			return 0, errors.New("[]byte is too short")
+			return 0, errors.New("MetaDict.Encode：[]byte is too short")
 		}
 		src[index] = byte(len(d.key[i]))
 		index++

@@ -17,7 +17,7 @@ const (
 )
 
 //ErrMachineTimeUnSynchronize 定义错误
-var ErrMachineTimeUnSynchronize = errors.New("utils.SnowFlakeId.NextId|机器时钟后跳，timeGen()生成时间戳，早于SnowFlakeId记录的时间戳")
+var ErrMachineTimeUnSynchronize = errors.New("SnowFlakeId.NextId：机器时钟后跳，timeGen()生成时间戳，早于SnowFlakeId记录的时间戳")
 
 //
 //各个工作站生成Twitter-Snowflake算法的ID
