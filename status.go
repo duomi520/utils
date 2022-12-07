@@ -16,10 +16,6 @@ const (
 	StatusStream
 	StatusBroadcast
 	StatusError
-	StatusEvent
-	StatusBreakerClosed
-	StatusBreakerOpen
-	StatusBreakerHalfOpen
 )
 
 //状态码
@@ -38,10 +34,6 @@ const (
 	StatusStream16
 	StatusBroadcast16
 	StatusError16
-	StatusEvent16
-	StatusBreakerClosed16
-	StatusBreakerOpen16
-	StatusBreakerHalfOpen16
 )
 
 // HTTP状态码，参见RFC 2616
