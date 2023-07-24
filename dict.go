@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	"strings"
 )
 
@@ -25,7 +24,7 @@ func (d *MetaDict) GetAll() ([]string, []string) {
 //Set
 func (d *MetaDict) Set(key, value string) {
 	for i := 0; i < d.lenght; i++ {
-		if d.key[i] == key {
+		if strings.EqualFold(d.key[i], key) {
 			d.value[i] = value
 			return
 		}
@@ -38,7 +37,7 @@ func (d *MetaDict) Set(key, value string) {
 //Get
 func (d *MetaDict) Get(key string) (string, bool) {
 	for i := 0; i < d.lenght; i++ {
-		if d.key[i] == key {
+		if strings.EqualFold(d.key[i], key) {
 			return d.value[i], true
 		}
 	}
@@ -68,23 +67,27 @@ func (d *MetaDict) Del(key string) {
 */
 
 //Encode 编码
-func (d *MetaDict) Encode(src []byte) (int, error) {
+func (d *MetaDict) Encode() []byte {
+	if d.lenght==0 {
+		return nil
+	}
+	size:=0
+	for i := 0; i < d.lenght; i++ {
+		size+=2 + len(d.key[i]) + len(d.value[i])
+	}
+	buf:=make([]byte,size)
 	index := 0
 	for i := 0; i < d.lenght; i++ {
-		need := 2 + len(d.key[i]) + len(d.value[i])
-		if len(src) < (index + need) {
-			return 0, errors.New("MetaDict.Encode：[]byte is too short")
-		}
-		src[index] = byte(len(d.key[i]))
+		buf[index] = byte(len(d.key[i]))
 		index++
-		copy(src[index:], StringToBytes(d.key[i]))
+		copy(buf[index:], StringToBytes(d.key[i]))
 		index = index + len(d.key[i])
-		src[index] = byte(len(d.value[i]))
+		buf[index] = byte(len(d.value[i]))
 		index++
-		copy(src[index:], StringToBytes(d.value[i]))
+		copy(buf[index:], StringToBytes(d.value[i]))
 		index = index + len(d.value[i])
 	}
-	return index, nil
+	return buf
 }
 
 //Decode 解码

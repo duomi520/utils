@@ -40,19 +40,10 @@ func TestDictCode(t *testing.T) {
 	for i := 0; i < len(testKey); i++ {
 		d.Set(testKey[i], testValue[i])
 	}
-	buf := make([]byte, 256)
-	n, err := d.Encode(buf)
-	if err != nil {
-		t.Error(err)
-	}
-	m.Decode(buf[:n])
+	buf := d.Encode()
+	m.Decode(buf)
 	if m.Len() != 10 {
 		t.Error(m)
-	}
-	buf = make([]byte, 25)
-	_, err = d.Encode(buf)
-	if err == nil {
-		t.Error("错误")
 	}
 }
 

@@ -7,7 +7,6 @@ const (
 	StatusPing
 	StatusPong
 	StatusGoaway
-	StatusHijacker
 	StatusRequest
 	StatusResponse
 	StatusCtxCancelFunc
@@ -25,7 +24,6 @@ const (
 	StatusPing16
 	StatusPong16
 	StatusGoaway16
-	StatusHijacker16
 	StatusRequest16
 	StatusResponse16
 	StatusCtxCancelFunc16

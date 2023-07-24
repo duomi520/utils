@@ -5,15 +5,15 @@ import (
 	"sync/atomic"
 )
 
-//CopyOnWriteList (COW)需要修改的时候拷贝一个副本出来，适用不频繁写的场景
-//修改时新数据原子替换旧数据地址，旧数据由GC回收。
+// CopyOnWriteList (COW)需要修改的时候拷贝一个副本出来，适用不频繁写的场景
+// 修改时新数据原子替换旧数据地址，旧数据由GC回收。
 type CopyOnWriteList struct {
 	//0-unlock 1-lock
 	mutex int64
 	slice atomic.Value
 }
 
-//NewCopyOnWriteList 新增
+// NewCopyOnWriteList 新增
 func NewCopyOnWriteList() *CopyOnWriteList {
 	l := CopyOnWriteList{}
 	var data []any
@@ -21,7 +21,7 @@ func NewCopyOnWriteList() *CopyOnWriteList {
 	return &l
 }
 
-//Add 增加
+// Add 增加
 func (l *CopyOnWriteList) Add(element any) {
 	for {
 		if atomic.CompareAndSwapInt64(&l.mutex, 0, 1) {
@@ -38,7 +38,7 @@ func (l *CopyOnWriteList) Add(element any) {
 	}
 }
 
-//Remove 移除
+// Remove 移除
 func (l *CopyOnWriteList) Remove(judge func(any) bool) {
 	for {
 		if atomic.CompareAndSwapInt64(&l.mutex, 0, 1) {
@@ -58,7 +58,7 @@ func (l *CopyOnWriteList) Remove(judge func(any) bool) {
 	}
 }
 
-//List 列
+// List 列
 func (l *CopyOnWriteList) List() []any {
 	return l.slice.Load().([]any)
 }
@@ -66,3 +66,5 @@ func (l *CopyOnWriteList) List() []any {
 // https://github.com/yireyun/go-queue
 // https://github.com/Workiva/go-datastructures
 // https://www.jianshu.com/p/231caf90f30b
+// https://zhuanlan.zhihu.com/p/512916201
+// https://blog.csdn.net/tjcwt2011/article/details/108293520

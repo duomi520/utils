@@ -2,8 +2,8 @@ package utils
 
 import "net"
 
-//PrivateIP 本地IP4地址
-func PrivateIP() string {
+//PrivateIP4 本地IP4地址
+func PrivateIP4() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return ""
