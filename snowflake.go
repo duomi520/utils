@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-//定义snowflake的参数
+// 定义snowflake的参数
 const (
 	//最大1023
 	MaxWorkNumber = 1023
@@ -16,14 +16,14 @@ const (
 	TimestampLeftShift = uint(22)
 )
 
-//ErrMachineTimeUnSynchronize 定义错误
+// ErrMachineTimeUnSynchronize 定义错误
 var ErrMachineTimeUnSynchronize = errors.New("SnowFlakeId.NextId：机器时钟后跳，timeGen()生成时间戳，早于SnowFlakeId记录的时间戳")
 
 //
 //各个工作站生成Twitter-Snowflake算法的ID
 //
 
-//SnowFlakeID 工作站
+// SnowFlakeID 工作站
 type SnowFlakeID struct {
 	//时间戳启动计算时间零点
 	systemCenterStartupTime int64
@@ -36,7 +36,7 @@ type SnowFlakeID struct {
 	mutex    sync.Mutex
 }
 
-//NewSnowFlakeID 工作组
+// NewSnowFlakeID 工作组
 func NewSnowFlakeID(id int64, startupTime int64) *SnowFlakeID {
 	if id < 0 || id >= MaxWorkNumber || startupTime < 0 {
 		return nil
@@ -50,7 +50,7 @@ func NewSnowFlakeID(id int64, startupTime int64) *SnowFlakeID {
 	return s
 }
 
-//NextID 取得 snowflake id.
+// NextID 取得 snowflake id.
 func (s *SnowFlakeID) NextID() (int64, error) {
 	timestamp := timeGen()
 	s.mutex.Lock()
@@ -75,19 +75,19 @@ func (s *SnowFlakeID) NextID() (int64, error) {
 	return id, nil
 }
 
-//timeGen 取得time.Now() unix 毫秒.
+// timeGen 取得time.Now() unix 毫秒.
 func timeGen() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }
 
-//GetWorkID 取得工作机器id
+// GetWorkID 取得工作机器id
 func GetWorkID(id int64) int64 {
 	temp := id >> WorkLeftShift
 	//1111111111   10bit
 	return temp & 1023
 }
 
-//GetWorkID 取得工作机器id
+// GetWorkID 取得工作机器id
 func (s *SnowFlakeID) GetWorkID() int64 {
 	return s.workID >> WorkLeftShift
 }

@@ -2,5 +2,6 @@
 
 - 引入Go slog 日志包 golang.org/x/exp/slog
 - 优化pool
-- 协程池
+- 控制数量的协程池
 - 统计模块
+- 改良版的雪花算法  <https://zhuanlan.zhihu.com/p/648460337>

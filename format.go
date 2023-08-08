@@ -2,7 +2,7 @@ package utils
 
 import "runtime"
 
-func formatRecover() ([]byte, any) {
+func FormatRecover() ([]byte, any) {
 	if r := recover(); r != nil {
 		const size = 65536
 		buf := make([]byte, size)
