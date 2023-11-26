@@ -1,28 +1,17 @@
 package utils
 
 import (
-	"reflect"
 	"unsafe"
 )
 
 // StringToBytes String转Bytes 转后不要修改Bytes
-//
-// 后续go版本无法预测不变
 func StringToBytes(s string) (b []byte) {
-	/* #nosec G103 */
-	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	/* #nosec G103 */
-	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	bh.Data, bh.Len, bh.Cap = sh.Data, sh.Len, sh.Len
-	return b
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 // BytesToString Bytes转String 转后不要修改Bytes
-//
-// 后续go版本无法预测不变
 func BytesToString(b []byte) string {
-	/* #nosec G103 */
-	return *(*string)(unsafe.Pointer(&b))
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
 type Integer interface {
