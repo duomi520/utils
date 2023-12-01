@@ -130,20 +130,22 @@ func hash(data string, seed uint64) uint64 {
 	return _wymum(seed^see1, uint64(len)^_wyp4)
 }
 
-// Hash64 returns a 64bit digest of the data with different ones for every seed.
-func Hash64(data []byte, seed uint64) uint64 {
+// Hash64WY returns a 64bit digest of the data with different ones for every seed.
+func Hash64WY[T string | []byte](data T, seed uint64) uint64 {
 	if len(data) == 0 {
 		return seed
 	}
 	return hash(*(*string)(unsafe.Pointer(&data)), seed)
 }
 
-// HashString64 returns a 64bit digest of the data with different ones for every seed.
-func HashString64(data string, seed uint64) uint64 {
-	if len(data) == 0 {
-		return seed
+// FNV-1a算法
+func Hash64FNV1A[T string | []byte](data T) uint64 {
+	var h uint64 = 14695981039346656037
+	for i := 0; i < len(data); i++ {
+		h = h ^ uint64(data[i])
+		h = h * 1099511628211
 	}
-	return hash(*(*string)(unsafe.Pointer(&data)), seed)
+	return h
 }
 
 // https://github.com/wangyi-fudan/wyhash

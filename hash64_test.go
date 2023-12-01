@@ -4,16 +4,25 @@ import (
 	"testing"
 )
 
+func BenchmarkHash64FNV1A(b *testing.B) {
+	p := []byte("hellow2023")
+	for i := 0; i < b.N; i++ {
+		Hash64FNV1A(p)
+	}
+}
+
 func BenchmarkHashString64(b *testing.B) {
 	p := "hellow2023"
 	for i := 0; i < b.N; i++ {
-		HashString64(p, 123456789)
+		Hash64WY(p, 123456789)
 	}
 }
 func TestHashString64(t *testing.T) {
 	p := "hellow"
-	t.Logf("HashString64(%s)=%d", p, HashString64(p, 0x0102030405060708))
+	t.Logf("HashString64(%s)=%d", p, Hash64WY(p, 0x0102030405060708))
 }
+
+// HashString64(hellow)=12545319294691448170
 
 var vecs = [...]uint64{
 	0x0102030405060708,
@@ -2023,7 +2032,7 @@ func TestHash64(t *testing.T) {
 
 	for i, want := range vecs {
 		data = append(data, byte(i))
-		got := Hash64(data[:i], 0x0102030405060708)
+		got := Hash64WY(data[:i], 0x0102030405060708)
 		if i != 0 && got != want {
 			t.Errorf("Hash(...%d)=%x, want %x", i, got, want)
 		}

@@ -1,50 +1,52 @@
 package utils
 
 import (
-	"bytes"
 	"sync/atomic"
 )
 
 type Cell struct {
-	in  []byte
-	out any
+	wyhash uint64
+	fnv1a  uint64
+	out    any
 }
 
 // IdempotentCache 幂等函数缓存，幂等方法，是指可以使用相同参数重复执行，并能获得相同结果的函数
-type IdempotentCache struct {
+type IdempotentCache[T string | []byte] struct {
 	power uint64
 	size  uint64
 	seed  uint64
 	buf   []atomic.Value
-	do    func([]byte) any
+	do    func(T) any
 }
 
-// NewIdempotentCache 新建
-func NewIdempotentCache(power, seed uint64, do func([]byte) any) *IdempotentCache {
-	return &IdempotentCache{
-		power: power,
-		size:  2 ^ power,
-		seed:  seed,
-		buf:   make([]atomic.Value, 2^power),
-		do:    do,
-	}
+// Init 初始化
+func (ic *IdempotentCache[T]) Init(power, seed uint64, do func(T) any) {
+	ic.power = power
+	ic.size = 2 ^ power
+	ic.seed = seed
+	ic.buf = make([]atomic.Value, 2^power)
+	ic.do = do
 }
 
 // Get 取
-func (ic *IdempotentCache) Get(in []byte) any {
-	got := Hash64(in, ic.seed)
+func (ic *IdempotentCache[T]) Get(in T) any {
+	h := Hash64WY(in, ic.seed)
+	f := Hash64FNV1A(in)
 	//取余
-	index := got & (ic.size - 1)
+	index := h & (ic.size - 1)
 	v := ic.buf[index].Load()
 	if v != nil {
 		cell := v.(Cell)
-		if bytes.EqualFold(in, cell.in) {
+		if cell.wyhash == h && cell.fnv1a == f {
 			return cell.out
 		}
 	}
 	var c Cell
-	c.in = in
+	c.wyhash = h
+	c.fnv1a = f
 	c.out = ic.do(in)
 	ic.buf[index].Store(c)
 	return c.out
 }
+
+// https://github.com/cespare/xxhash
