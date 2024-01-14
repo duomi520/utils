@@ -1,107 +1,104 @@
 package utils
 
 import (
-	"strings"
+	"encoding/binary"
 )
 
-//MetaDict 非线程安全,key数量超过5个后，效率低于map
+// MetaDict 非线程安全,key数量超过5个后，效率低于map
 type MetaDict struct {
-	lenght int
-	key    []string
-	value  []string
+	key   []uint64
+	value []string
 }
 
-//Len
+// Len 返回字典中键值对的数量
 func (d *MetaDict) Len() int {
-	return d.lenght
+	return len(d.key)
 }
 
-//GetAll
-func (d *MetaDict) GetAll() ([]string, []string) {
-	return d.key, d.value
+// GetAll
+func (d *MetaDict) GetAll() []string {
+	return d.value
 }
 
-//Set
-func (d *MetaDict) Set(key, value string) {
-	for i := 0; i < d.lenght; i++ {
-		if strings.EqualFold(d.key[i], key) {
-			d.value[i] = value
-			return
+func (d *MetaDict) findIndex(hash uint64) int {
+	for i, k := range d.key {
+		if k == hash {
+			return i
 		}
 	}
-	d.key = append(d.key, key)
-	d.value = append(d.value, value)
-	d.lenght++
+	return -1
 }
 
-//Get
+// Set 设置给定键的值，如果该键已存在，则更新值；如果不存在，则添加新的键值对。
+func (d *MetaDict) Set(key, value string) {
+	hash := Hash64FNV1A(key)
+	if idx := d.findIndex(hash); idx != -1 {
+		d.value[idx] = value
+		return
+	}
+	d.key = append(d.key, hash)
+	d.value = append(d.value, value)
+}
+
+// Get 根据给定的键返回相应的值。如果键存在，则返回对应的值和true；如果键不存在，则返回空字符串和false。
 func (d *MetaDict) Get(key string) (string, bool) {
-	for i := 0; i < d.lenght; i++ {
-		if strings.EqualFold(d.key[i], key) {
-			return d.value[i], true
-		}
+	hash := Hash64FNV1A(key)
+	if idx := d.findIndex(hash); idx != -1 {
+		return d.value[idx], true
 	}
 	return "", false
 }
 
-//Del
+// Del 根据给定的键删除相应的键值对。
 func (d *MetaDict) Del(key string) {
-	for i := 0; i < d.lenght; i++ {
-		if strings.EqualFold(d.key[i], key) {
-			if i < (d.lenght - 1) {
-				copy(d.key[i:], d.key[i+1:])
-				copy(d.value[i:], d.value[i+1:])
-			}
-			d.lenght--
-			d.key = d.key[:d.lenght]
-			d.value = d.value[:d.lenght]
-			return
+	hash := Hash64FNV1A(key)
+	if idx := d.findIndex(hash); idx != -1 {
+		if idx < (d.Len() - 1) {
+			copy(d.key[idx:], d.key[idx+1:])
+			copy(d.value[idx:], d.value[idx+1:])
 		}
+		d.key = d.key[:d.Len()-1]
+		d.value = d.value[:d.Len()-1]
+		return
 	}
 }
 
 /*
 +-------+-------+-------+-------+-------+-------+
-| len(8)|      key      | len(8)|    value      |  ...
+| len(8)|        key (64)       |    value      |  ...
 +-------+-------+-------+-------+-------+-------+
 */
 
-//Encode 编码
+// Encode 编码 将字典编码为字节切片。
 func (d *MetaDict) Encode() []byte {
-	if d.lenght==0 {
+	length := d.Len()
+	if length == 0 {
 		return nil
 	}
-	size:=0
-	for i := 0; i < d.lenght; i++ {
-		size+=2 + len(d.key[i]) + len(d.value[i])
+	n := 0
+	for i := 0; i < length; i++ {
+		n += 1 + 8 + len(d.value[i])
 	}
-	buf:=make([]byte,size)
-	index := 0
-	for i := 0; i < d.lenght; i++ {
-		buf[index] = byte(len(d.key[i]))
-		index++
-		copy(buf[index:], StringToBytes(d.key[i]))
-		index = index + len(d.key[i])
-		buf[index] = byte(len(d.value[i]))
-		index++
-		copy(buf[index:], StringToBytes(d.value[i]))
-		index = index + len(d.value[i])
+	buf := make([]byte, n)
+	idx := 0
+	for i := 0; i < length; i++ {
+		buf[idx] = byte(1 + 8 + len(d.value[i]))
+		idx++
+		binary.LittleEndian.PutUint64(buf[idx:], d.key[i])
+		idx += 8
+		copy(buf[idx:], StringToBytes(d.value[i]))
+		idx += len(d.value[i])
 	}
 	return buf
 }
 
-//Decode 解码
+// Decode 解码 将字节切片解码为字典。
 func (d *MetaDict) Decode(data []byte) {
-	index, size := 0, 0
-	for len(data) > index {
-		size = int(data[index])
-		index++
-		d.key = append(d.key, string(data[index:index+size]))
-		index = index + size
-		size = int(data[index])
-		index++
-		d.value = append(d.value, string(data[index:index+size]))
-		index = index + size
+	idx := 0
+	for len(data) > idx {
+		n := int(data[idx])
+		d.key = append(d.key, binary.LittleEndian.Uint64(data[idx:idx+1+8]))
+		d.value = append(d.value, string(data[idx+1+8:idx+n]))
+		idx += n
 	}
-	d.lenght = len(d.key)
 }

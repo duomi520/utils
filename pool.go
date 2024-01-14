@@ -6,7 +6,13 @@ import (
 )
 
 var defaultPool sync.Pool
-var defaultByteSize uint64 = 1024
+var defaultByteSize = uint64(1024)
+
+func init() {
+	defaultPool.New = func() interface{} {
+		return &[]byte{}
+	}
+}
 
 func GetSlice() *[]byte {
 	v := defaultPool.Get()
@@ -18,6 +24,10 @@ func GetSlice() *[]byte {
 }
 func PutSlice(x *[]byte) {
 	defaultPool.Put(x)
+}
+
+func ChangeDefaultByteSize(n uint64) {
+	atomic.StoreUint64(&defaultByteSize, n)
 }
 
 // https://github.com/valyala/bytebufferpool

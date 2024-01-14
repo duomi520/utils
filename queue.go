@@ -16,8 +16,7 @@ type CopyOnWriteList struct {
 // NewCopyOnWriteList 新增
 func NewCopyOnWriteList() *CopyOnWriteList {
 	l := CopyOnWriteList{}
-	var data []any
-	l.slice.Store(data)
+	l.slice.Store([]any{})
 	return &l
 }
 
@@ -26,10 +25,8 @@ func (l *CopyOnWriteList) Add(element any) {
 	for {
 		if atomic.CompareAndSwapInt64(&l.mutex, 0, 1) {
 			base := l.slice.Load().([]any)
-			size := len(base)
-			data := make([]any, size+1)
-			copy(data[:size], base)
-			data[size] = element
+			data := append([]any{}, base...)
+			data = append(data, element)
 			l.slice.Store(data)
 			atomic.StoreInt64(&l.mutex, 0)
 			return
@@ -43,11 +40,10 @@ func (l *CopyOnWriteList) Remove(judge func(any) bool) {
 	for {
 		if atomic.CompareAndSwapInt64(&l.mutex, 0, 1) {
 			base := l.slice.Load().([]any)
-			size := len(base)
-			data := make([]any, 0, size)
-			for i := 0; i < size; i++ {
-				if !judge(base[i]) {
-					data = append(data, base[i])
+			data := make([]any, 0, len(base))
+			for _, item := range base {
+				if !judge(item) {
+					data = append(data, item)
 				}
 			}
 			l.slice.Store(data)

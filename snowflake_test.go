@@ -11,23 +11,23 @@ import (
 // 工作组中心分配工作机器id
 //
 
-//ErrFailureAllocID 定义错误
+// ErrFailureAllocID 定义错误
 var ErrFailureAllocID = errors.New("utils.IdWorker.GetId|工作机器id耗尽。")
 
-//IDWorker 工作组用于分配工作机器id
+// IDWorker 工作组用于分配工作机器id
 type IDWorker struct {
 	//2018-6-1 00:00:00 UTC  ，时间戳启动计算时间零点
-	SystemCenterStartupTime int64 
+	SystemCenterStartupTime int64
 	queue                   []int
 	queueMap                []int
 	//消费
-	consumption             int 
+	consumption int
 	//生产
-	production              int 
-	mutex                   sync.Mutex
+	production int
+	mutex      sync.Mutex
 }
 
-//NewIDWorker 初始化
+// NewIDWorker 初始化
 func NewIDWorker(st int64) *IDWorker {
 	w := &IDWorker{
 		SystemCenterStartupTime: st,
@@ -43,7 +43,7 @@ func NewIDWorker(st int64) *IDWorker {
 	return w
 }
 
-//GetID 取id
+// GetID 取id
 func (w *IDWorker) GetID() (int, error) {
 	n := 0
 	var err error
@@ -69,7 +69,7 @@ func (w *IDWorker) GetID() (int, error) {
 //当工作机器与工作组中心的时间不同步时，释放后再利用的workID与之前释放的workID的snowflake id会重复，逻辑上产生bug。
 //
 
-//PutID 还id
+// PutID 还id
 func (w *IDWorker) PutID(n int) {
 	if n < 0 || n >= MaxWorkNumber {
 		return
@@ -90,9 +90,9 @@ func (w *IDWorker) PutID(n int) {
 
 func TestIDWorker(t *testing.T) {
 	// Test table
-	idWorkerTests := []int{2, 3, 8, 10, -1, MaxWorkNumber + 1, -10} 
+	idWorkerTests := []int{2, 3, 8, 10, -1, MaxWorkNumber + 1, -10}
 	// Verify table
-	idWorkerVerify := []int{2, 3, 8, 10}                            
+	idWorkerVerify := []int{2, 3, 8, 10}
 	w := NewIDWorker(time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for i := 0; i < MaxWorkNumber; i++ {
 		f, err := w.GetID()
@@ -117,18 +117,18 @@ func TestIDWorker(t *testing.T) {
 }
 func TestNextID(t *testing.T) {
 	var v [30000]int64
-	s1 := NewSnowFlakeID(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s1 := NewSnowFlakeIDPlus(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for i := 0; i < 10000; i++ {
-		v[i], _ = s1.NextID()
+		v[i] = s1.NextID()
 	}
 	time.Sleep(time.Millisecond)
-	s2 := NewSnowFlakeID(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s2 := NewSnowFlakeIDPlus(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for i := 10000; i < 20000; i++ {
-		v[i], _ = s2.NextID()
+		v[i] = s2.NextID()
 	}
-	s3 := NewSnowFlakeID(3, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s3 := NewSnowFlakeIDPlus(3, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for i := 20000; i < 30000; i++ {
-		v[i], _ = s3.NextID()
+		v[i] = s3.NextID()
 	}
 	//验证
 	for i := 0; i < (30000 - 1); i++ {
@@ -140,19 +140,19 @@ func TestNextID(t *testing.T) {
 }
 
 func TestGetWorkID(t *testing.T) {
-	s1 := NewSnowFlakeID(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
-	s2 := NewSnowFlakeID(555, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
-	s3 := NewSnowFlakeID(1022, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
-	n1, _ := s1.NextID()
-	n2, _ := s2.NextID()
-	n3, _ := s3.NextID()
-	if GetWorkID(n1) != 1 {
-		t.Error("失败:", n1, GetWorkID(n1))
+	s1 := NewSnowFlakeIDPlus(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s2 := NewSnowFlakeIDPlus(555, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s3 := NewSnowFlakeIDPlus(1022, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	n1 := s1.NextID()
+	n2 := s2.NextID()
+	n3 := s3.NextID()
+	if GetWorkID(n1) != 1 || s1.GetWorkID() != 1 {
+		t.Error("失败:", n1, GetWorkID(n1), s1.GetWorkID())
 	}
-	if GetWorkID(n2) != 555 {
-		t.Error("失败:", n2, GetWorkID(n2))
+	if GetWorkID(n2) != 555 || s2.GetWorkID() != 555 {
+		t.Error("失败:", n2, GetWorkID(n2), s2.GetWorkID())
 	}
-	if GetWorkID(n3) != 1022 {
-		t.Error("失败:", n3, GetWorkID(n3))
+	if GetWorkID(n3) != 1022 || s3.GetWorkID() != 1022 {
+		t.Error("失败:", n3, GetWorkID(n3), s3.GetWorkID())
 	}
 }

@@ -2,6 +2,7 @@ package utils
 
 //代码抄自 https://github.com/zeebo/wyhash
 import (
+	"encoding/binary"
 	"math/bits"
 	"unsafe"
 )
@@ -20,11 +21,11 @@ func _wymum(A, B uint64) uint64 {
 }
 
 func _wyr8(p unsafe.Pointer) uint64 {
-	return BytesToInteger64[uint64]((*[8]byte)(p)[:])
+	return binary.LittleEndian.Uint64((*[8]byte)(p)[:])
 }
 
 func _wyr4(p unsafe.Pointer) uint64 {
-	return uint64(BytesToInteger32[uint32]((*[4]byte)(p)[:]))
+	return uint64(binary.LittleEndian.Uint32((*[4]byte)(p)[:]))
 }
 
 func _wyr3(p unsafe.Pointer, k uintptr) uint64 {
@@ -138,14 +139,16 @@ func Hash64WY[T string | []byte](data T, seed uint64) uint64 {
 	return hash(*(*string)(unsafe.Pointer(&data)), seed)
 }
 
+var prime64 uint64 = 1099511628211
+
 // FNV-1a算法
 func Hash64FNV1A[T string | []byte](data T) uint64 {
-	var h uint64 = 14695981039346656037
+	var result uint64 = 14695981039346656037
 	for i := 0; i < len(data); i++ {
-		h = h ^ uint64(data[i])
-		h = h * 1099511628211
+		result ^= uint64(data[i])
+		result *= prime64
 	}
-	return h
+	return result
 }
 
 // https://github.com/wangyi-fudan/wyhash

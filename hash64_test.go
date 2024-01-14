@@ -1,8 +1,25 @@
 package utils
 
 import (
+	"hash/fnv"
 	"testing"
 )
+
+func TestHash64FNV1A(t *testing.T) {
+	var data = []string{
+		"a", "123456789", "", "五一劳动节！",
+	}
+	std := fnv.New64a()
+	std.Write([]byte(data[0]))
+	std.Sum64()
+	for _, v := range data {
+		std.Reset()
+		std.Write([]byte(v))
+		if std.Sum64() != Hash64FNV1A(v) {
+			t.Errorf("Hash %s, std= %d, Hash64FNV1A= %d", v, std.Sum64(), Hash64FNV1A(v))
+		}
+	}
+}
 
 func BenchmarkHash64FNV1A(b *testing.B) {
 	p := []byte("hellow2023")
