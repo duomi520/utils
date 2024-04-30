@@ -14,7 +14,7 @@ func init() {
 	}
 }
 
-func GetSlice() *[]byte {
+func AllocSlice() *[]byte {
 	v := defaultPool.Get()
 	if v != nil {
 		return v.(*[]byte)
@@ -22,7 +22,7 @@ func GetSlice() *[]byte {
 	b := make([]byte, 0, atomic.LoadUint64(&defaultByteSize))
 	return &b
 }
-func PutSlice(x *[]byte) {
+func FreeSlice(x *[]byte) {
 	defaultPool.Put(x)
 }
 
