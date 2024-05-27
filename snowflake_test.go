@@ -12,7 +12,7 @@ import (
 //
 
 // ErrFailureAllocID 定义错误
-var ErrFailureAllocID = errors.New("utils.IdWorker.GetId|工作机器id耗尽。")
+var ErrFailureAllocID = errors.New("工作机器id耗尽")
 
 // IDWorker 工作组用于分配工作机器id
 type IDWorker struct {
@@ -117,18 +117,18 @@ func TestIDWorker(t *testing.T) {
 }
 func TestNextID(t *testing.T) {
 	var v [30000]int64
-	s1 := NewSnowFlakeIDPlus(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s1 := NewSnowFlakeID(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for i := 0; i < 10000; i++ {
-		v[i] = s1.NextID()
+		v[i], _ = s1.NextID()
 	}
 	time.Sleep(time.Millisecond)
-	s2 := NewSnowFlakeIDPlus(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s2 := NewSnowFlakeID(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for i := 10000; i < 20000; i++ {
-		v[i] = s2.NextID()
+		v[i], _ = s2.NextID()
 	}
-	s3 := NewSnowFlakeIDPlus(3, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s3 := NewSnowFlakeID(3, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for i := 20000; i < 30000; i++ {
-		v[i] = s3.NextID()
+		v[i], _ = s3.NextID()
 	}
 	//验证
 	for i := 0; i < (30000 - 1); i++ {
@@ -140,19 +140,19 @@ func TestNextID(t *testing.T) {
 }
 
 func TestGetWorkID(t *testing.T) {
-	s1 := NewSnowFlakeIDPlus(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
-	s2 := NewSnowFlakeIDPlus(555, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
-	s3 := NewSnowFlakeIDPlus(1022, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
-	n1 := s1.NextID()
-	n2 := s2.NextID()
-	n3 := s3.NextID()
-	if GetWorkID(n1) != 1 || s1.GetWorkID() != 1 {
-		t.Error("失败:", n1, GetWorkID(n1), s1.GetWorkID())
+	s1 := NewSnowFlakeID(1, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s2 := NewSnowFlakeID(555, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	s3 := NewSnowFlakeID(1022, time.Date(2017, time.January, 1, 0, 0, 0, 0, time.UTC).UnixNano())
+	n1, _ := s1.NextID()
+	n2, _ := s2.NextID()
+	n3, _ := s3.NextID()
+	if GetWorkID(n1) != 1 {
+		t.Error("失败:", n1, GetWorkID(n1))
 	}
-	if GetWorkID(n2) != 555 || s2.GetWorkID() != 555 {
-		t.Error("失败:", n2, GetWorkID(n2), s2.GetWorkID())
+	if GetWorkID(n2) != 555 {
+		t.Error("失败:", n2, GetWorkID(n2))
 	}
-	if GetWorkID(n3) != 1022 || s3.GetWorkID() != 1022 {
-		t.Error("失败:", n3, GetWorkID(n3), s3.GetWorkID())
+	if GetWorkID(n3) != 1022 {
+		t.Error("失败:", n3, GetWorkID(n3))
 	}
 }
