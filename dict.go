@@ -2,63 +2,61 @@ package utils
 
 import (
 	"encoding/binary"
+	"slices"
 )
 
-type ky struct {
-	key   uint64
-	value string
+type iMetaDict interface {
+	string | any
 }
 
 // MetaDict 非线程安全,key数量超过5个后，效率低于map
-type MetaDict []ky
-
-// GetAll
-func (d MetaDict) GetAll() (s []string) {
-	for _, k := range d {
-		s = append(s, k.value)
-	}
-	return s
+type MetaDict[T iMetaDict] struct {
+	key   []uint64
+	value []T
 }
 
-func (d MetaDict) findIndex(hash uint64) int {
-	for i, k := range d {
-		if k.key == hash {
-			return i
-		}
-	}
-	return -1
+// Len 长度
+func (m MetaDict[iMetaDict]) Len() int {
+	return len(m.key)
+}
+
+// GetAll
+func (m MetaDict[iMetaDict]) GetAll() (s []iMetaDict) {
+	return m.value
 }
 
 // Set 设置给定键的值，如果该键已存在，则更新值；如果不存在，则添加新的键值对。
-func (d MetaDict) Set(key, value string) (new MetaDict) {
+func (m MetaDict[iMetaDict]) Set(key string, value iMetaDict) MetaDict[iMetaDict] {
 	hash := Hash64FNV1A(key)
-	if idx := d.findIndex(hash); idx != -1 {
-		d[idx].value = value
-		return d
+	if idx := slices.Index(m.key, hash); idx > -1 {
+		m.value[idx] = value
+		return m
 	}
-	new = append(d, ky{hash, value})
-	return new
+	m.key = append(m.key, hash)
+	m.value = append(m.value, value)
+	return m
 }
 
 // Get 根据给定的键返回相应的值。如果键存在，则返回对应的值和true；如果键不存在，则返回空字符串和false。
-func (d MetaDict) Get(key string) (string, bool) {
+func (m MetaDict[iMetaDict]) Get(key string) (v iMetaDict, ok bool) {
 	hash := Hash64FNV1A(key)
-	if idx := d.findIndex(hash); idx != -1 {
-		return d[idx].value, true
+	if idx := slices.Index(m.key, hash); idx > -1 {
+		v = m.value[idx]
+		ok = true
+		return
 	}
-	return "", false
+	ok = false
+	return
 }
 
 // Del 根据给定的键删除相应的键值对。
-func (d MetaDict) Del(key string) (new MetaDict) {
+func (m MetaDict[iMetaDict]) Del(key string) MetaDict[iMetaDict] {
 	hash := Hash64FNV1A(key)
-	if idx := d.findIndex(hash); idx != -1 {
-		if idx < (len(d) - 1) {
-			copy(d[idx:], d[idx+1:])
-		}
-		return d[:len(d)-1]
+	if idx := slices.Index(m.key, hash); idx > -1 {
+		m.key = slices.Delete(m.key, idx, idx+1)
+		m.value = slices.Delete(m.value, idx, idx+1)
 	}
-	return d
+	return m
 }
 
 /*
@@ -68,35 +66,36 @@ func (d MetaDict) Del(key string) (new MetaDict) {
 */
 
 // Encode 编码 将字典编码为字节切片。
-func MetaDictEncode(d MetaDict) []byte {
-	size := len(d)
+func MetaDictEncode(m MetaDict[string]) []byte {
+	size := m.Len()
 	if size == 0 {
 		return nil
 	}
 	n := 0
 	for i := 0; i < size; i++ {
-		n += 1 + 8 + len(d[i].value)
+		n += 1 + 8 + len(m.value[i])
 	}
 	buf := make([]byte, n)
 	idx := 0
 	for i := 0; i < size; i++ {
-		buf[idx] = byte(1 + 8 + len(d[i].value))
+		buf[idx] = byte(1 + 8 + len(m.value[i]))
 		idx++
-		binary.LittleEndian.PutUint64(buf[idx:], d[i].key)
+		binary.LittleEndian.PutUint64(buf[idx:], m.key[i])
 		idx += 8
-		copy(buf[idx:], StringToBytes(d[i].value))
-		idx += len(d[i].value)
+		copy(buf[idx:], StringToBytes(m.value[i]))
+		idx += len(m.value[i])
 	}
 	return buf
 }
 
 // Decode 解码 将字节切片解码为字典。
-func MetaDictDecode(data []byte) (d MetaDict) {
+func MetaDictDecode(data []byte) (m MetaDict[string]) {
 	idx := 0
 	for len(data) > idx {
 		n := int(data[idx])
-		d = append(d, ky{binary.LittleEndian.Uint64(data[idx+1 : idx+1+8]), string(data[idx+1+8 : idx+n])})
+		m.key = append(m.key, binary.LittleEndian.Uint64(data[idx+1:idx+1+8]))
+		m.value = append(m.value, string(data[idx+1+8:idx+n]))
 		idx += n
 	}
-	return d
+	return
 }

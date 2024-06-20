@@ -1,21 +1,17 @@
 package utils
 
 import (
+	"bytes"
 	"sync"
 	"sync/atomic"
 )
 
-var defaultPool sync.Pool
+var defaultSlicePool sync.Pool
 var defaultByteSize = uint64(1024)
-
-func init() {
-	defaultPool.New = func() interface{} {
-		return &[]byte{}
-	}
-}
+var defaultByteBufferPool sync.Pool
 
 func AllocSlice() *[]byte {
-	v := defaultPool.Get()
+	v := defaultSlicePool.Get()
 	if v != nil {
 		return v.(*[]byte)
 	}
@@ -23,7 +19,20 @@ func AllocSlice() *[]byte {
 	return &b
 }
 func FreeSlice(x *[]byte) {
-	defaultPool.Put(x)
+	defaultSlicePool.Put(x)
+}
+
+func AllocBuffer() *bytes.Buffer {
+	v := defaultByteBufferPool.Get()
+	if v != nil {
+		return v.(*bytes.Buffer)
+	}
+	b := make([]byte, 0, atomic.LoadUint64(&defaultByteSize))
+	return bytes.NewBuffer(b)
+}
+
+func FreeBuffer(x *bytes.Buffer) {
+	defaultByteBufferPool.Put(x)
 }
 
 func ChangeDefaultByteSize(n uint64) {

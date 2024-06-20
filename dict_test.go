@@ -9,11 +9,11 @@ var testKey []string = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
 var testValue []string = []string{"a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"}
 
 func TestDict(t *testing.T) {
-	var d MetaDict
+	var d MetaDict[string]
 	for i := 0; i < len(testKey); i++ {
 		d = d.Set(testKey[i], testValue[i])
 	}
-	if len(d) != 10 {
+	if d.Len() != 10 {
 		t.Error("len != 10")
 	}
 	for i := 0; i < len(testKey); i++ {
@@ -23,27 +23,27 @@ func TestDict(t *testing.T) {
 		}
 	}
 	d = d.Del("5")
-	if len(d) != 9 {
+	if d.Len() != 9 {
 		t.Error("len != 9")
 	}
 	d = d.Del("0")
-	if len(d) != 8 {
+	if d.Len() != 8 {
 		t.Error("len != 8")
 	}
 	d = d.Del("9")
-	if len(d) != 7 {
+	if d.Len() != 7 {
 		t.Error("len != 7")
 	}
 }
 
 func TestDictCode(t *testing.T) {
-	var d, m MetaDict
+	var d, m MetaDict[string]
 	for i := 0; i < len(testKey); i++ {
 		d = d.Set(testKey[i], testValue[i])
 	}
 	buf := MetaDictEncode(d)
 	m = MetaDictDecode(buf)
-	if len(m) != 10 {
+	if m.Len() != 10 {
 		t.Error(m)
 	}
 	v, ok := m.Get("7")
@@ -53,7 +53,7 @@ func TestDictCode(t *testing.T) {
 }
 
 func BenchmarkTestDict(b *testing.B) {
-	var d MetaDict
+	var d MetaDict[string]
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < 10; j++ {
 			d = d.Set(testKey[j], testValue[j])
