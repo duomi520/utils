@@ -47,7 +47,7 @@ func TestReplaceAttr(t *testing.T) {
 	})
 	fmt.Println(ErrorWithFullStack(err7))
 	logger := slog.New(h)
-	logger.Error("message", err7)
+	logger.Error("message", "err", err7)
 }
 
 /*
@@ -55,5 +55,5 @@ func TestReplaceAttr(t *testing.T) {
 warp2 warp1 something
 [errors_test.go:41] warp1 something
 [errors_test.go:39] somethin
-time=2024-04-30T00:00:12.360+08:00 level=ERROR msg=message trace="[errors_test.go:44] warp3 warp2 warp1 something\nwarp2 warp1 something\n[errors_test.go:41] warp1 something\n[errors_test.go:39] somethin"
+time=2024-06-24T18:57:09.669+08:00 level=ERROR msg=message trace="[errors_test.go:44] warp3 warp2 warp1 something\nwarp2 warp1 something\n[errors_test.go:41] warp1 something\n[errors_test.go:39] somethin"
 */
