@@ -2,11 +2,12 @@ package utils
 
 import (
 	"encoding/binary"
+	"io"
 	"slices"
 )
 
 type iMetaDict interface {
-	string | any
+	string | []byte | any
 }
 
 // MetaDict 非线程安全,key数量超过5个后，效率低于map
@@ -86,6 +87,28 @@ func MetaDictEncode(m MetaDict[string]) []byte {
 		idx += len(m.Value[i])
 	}
 	return buf
+}
+
+func MetaDictEncoder(m MetaDict[string], w io.Writer) error {
+	size := m.Len()
+	if size == 0 {
+		return nil
+	}
+	var buf [9]byte
+	for i := 0; i < size; i++ {
+		buf[0] = byte(1 + 8 + len(m.Value[i]))
+		binary.LittleEndian.PutUint64(buf[1:], m.Key[i])
+		_, err := w.Write(buf[:])
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(StringToBytes(m.Value[i]))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+
 }
 
 // Decode 解码 将字节切片解码为字典。

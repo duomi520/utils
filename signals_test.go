@@ -26,8 +26,8 @@ func TestEffector(t *testing.T) {
 	defer p.Close()
 	s1 := p.SignalState(1)
 	s2 := p.SignalState(2)
-	f := func() {
-		fmt.Printf("The count is %v and %v\n", GetSignal(p, s1), GetSignal(p, s2))
+	f := func(a *Processor) {
+		fmt.Printf("The count is %v and %v\n", GetSignal(a, s1), GetSignal(a, s2))
 	}
 	e := p.Effector(f, s1, s2)
 	p.SetSignalState(s1, 1314)
@@ -46,15 +46,15 @@ func TestComputed(t *testing.T) {
 	defer p.Close()
 	firstName := p.SignalState("John")
 	lastName := p.SignalState("Smith")
-	f1 := func() any {
-		return GetSignal(p, firstName).(string) + "." + GetSignal(p, lastName).(string)
+	f1 := func(a *Processor) any {
+		return GetSignal(a, firstName).(string) + "." + GetSignal(a, lastName).(string)
 	}
 	c1 := p.Computed(f1, firstName, lastName)
 	if !strings.EqualFold(p.GetComputerState(c1).(string), "John.Smith") {
 		t.Fatal(p.GetComputerState(c1))
 	}
-	f2 := func() any {
-		return "You name is " + GetComputer(p, c1).(string)
+	f2 := func(a *Processor) any {
+		return "You name is " + GetComputer(a, c1).(string)
 	}
 	c2 := p.Computed(f2, c1)
 	p.SetSignalState(firstName, "Joke")

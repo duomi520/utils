@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -37,17 +38,30 @@ func TestDict(t *testing.T) {
 }
 
 func TestDictCode(t *testing.T) {
-	var d, m MetaDict[string]
+	var d MetaDict[string]
 	for i := 0; i < len(testKey); i++ {
 		d = d.Set(testKey[i], testValue[i])
 	}
 	buf := MetaDictEncode(d)
-	m = MetaDictDecode(buf)
-	if m.Len() != 10 {
-		t.Error(m)
+	m1 := MetaDictDecode(buf)
+	if m1.Len() != 10 {
+		t.Error(m1)
 	}
-	v, ok := m.Get("7")
+	v, ok := m1.Get("7")
 	if !strings.EqualFold(v, "a7") {
+		t.Error(v, ok)
+	}
+	buffer := bytes.Buffer{}
+	err := MetaDictEncoder(d, &buffer)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	m2 := MetaDictDecode(buffer.Bytes())
+	if m2.Len() != 10 {
+		t.Error(m2)
+	}
+	v, ok = m2.Get("5")
+	if !strings.EqualFold(v, "a5") {
 		t.Error(v, ok)
 	}
 }

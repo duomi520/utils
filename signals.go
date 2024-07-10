@@ -46,7 +46,7 @@ type Computer struct {
 	parent   []int64
 	subIndex []int64
 	subSet   []func()
-	evaluate func() any
+	evaluate func(*Processor) any
 }
 
 func (c *Computer) Subscribe(i int64, f func()) {
@@ -150,7 +150,7 @@ func GetComputer(p *Processor, id int64) any {
 	}
 	c := v.(*Computer)
 	if !c.renovate {
-		c.value = c.evaluate()
+		c.value = c.evaluate(p)
 		c.renovate = true
 	}
 	return c.value
@@ -228,7 +228,7 @@ func (p *Processor) computed(id int64, value any) any {
 }
 
 // Computed 衍生 衍生能缓存计算结果，避免重复的计算，并且也能自动追踪依赖以及同步更新
-func (p *Processor) Computed(do func() any, t ...int64) (id int64) {
+func (p *Processor) Computed(do func(*Processor) any, t ...int64) (id int64) {
 	id = atomic.AddInt64(&p.increases, 1)
 	if atomic.LoadInt32(&p.stopFlag) == 0 {
 		return 0
@@ -307,12 +307,12 @@ func (p *Processor) effector(id int64, value any) any {
 }
 
 // Effector Reactions 反应 反应是数据更新时的监听器，监视值修改后，立即执行
-func (p *Processor) Effector(do func(), t ...int64) (id int64) {
+func (p *Processor) Effector(do func(*Processor), t ...int64) (id int64) {
 	id = atomic.AddInt64(&p.increases, 1)
 	if atomic.LoadInt32(&p.stopFlag) == 0 {
 		return 0
 	}
-	e := effectorMsg{do: do, parent: t}
+	e := effectorMsg{do: func() { do(p) }, parent: t}
 	p.commandChan <- command{id: id, value: e, do: p.effector}
 	return
 }
@@ -338,6 +338,23 @@ func (p *Processor) RemoveEffector(id int64) {
 		return
 	}
 	p.commandChan <- command{id: id, do: p.removeEffector}
+}
+
+func (p *Processor) unSubscribeEffector(id int64, parent any) any {
+	v, ok := p.set[parent.(int64)]
+	if !ok {
+		return nil
+	}
+	v.(Topic).UnSubscribe(id)
+	return nil
+}
+
+// UnSubscribeEffector
+func (p *Processor) UnSubscribeEffector(id, parent int64) {
+	if atomic.LoadInt32(&p.stopFlag) == 0 {
+		return
+	}
+	p.commandChan <- command{id: id, value: parent, do: p.unSubscribeEffector}
 }
 
 // https://zhuanlan.zhihu.com/p/691797618
