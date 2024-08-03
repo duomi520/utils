@@ -9,6 +9,7 @@ const (
 	StatusGoaway
 	StatusRequest
 	StatusResponse
+	StatusNotify
 	StatusCtxCancelFunc
 	StatusSubscribe
 	StatusUnsubscribe
@@ -26,6 +27,7 @@ const (
 	StatusGoaway16
 	StatusRequest16
 	StatusResponse16
+	StatusNotify16
 	StatusCtxCancelFunc16
 	StatusSubscribe16
 	StatusUnsubscribe16
