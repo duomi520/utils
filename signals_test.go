@@ -2,81 +2,77 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 )
 
-func TestSignalState(t *testing.T) {
-	p := NewProcessor()
-	s := p.SignalState(1314)
-	time.Sleep(time.Millisecond)
-	if p.GetSignalState(s).(int) != 1314 {
-		t.Error(p.GetSignalState(s))
+func TestSignal(t *testing.T) {
+	u := NewUniverse()
+	s := NewSignal(1314, nil)
+	u.Run()
+	if s.Load().(int) != 1314 {
+		t.Error(s.Load())
 	}
-	p.Close()
-	a := p.SignalState(2324)
+	u.Close()
+	s.Set(u, 2321)
 	time.Sleep(time.Millisecond)
-	if p.GetSignalState(a) != nil {
-		t.Error(p.GetSignalState(a))
+	if s.Load().(int) != 1314 {
+		t.Error(s.Load())
 	}
+	fmt.Println(s.Load())
 }
-func TestEffector(t *testing.T) {
-	p := NewProcessor()
-	defer p.Close()
-	s1 := p.SignalState(1)
-	s2 := p.SignalState(2)
-	f := func(a *Processor) {
-		fmt.Printf("The count is %v and %v\n", GetSignal(a, s1), GetSignal(a, s2))
+
+// 1314
+
+func TestComputed(t *testing.T) {
+	u := NewUniverse()
+	defer u.Close()
+	firstName := NewSignal("John", nil)
+	lastName := NewSignal("Smith", nil)
+	f1 := func(a ...Parent) any {
+		return a[0].Load().(string) + "." + a[1].Load().(string)
 	}
-	e := p.Effector(f, s1, s2)
-	p.SetSignalState(s1, 1314)
+	c1 := NewComputer(nil, f1, firstName, lastName)
+	f2 := func(a ...Parent) any {
+		return "You name is " + a[0].Load().(string)
+	}
+	c2 := NewComputer(nil, f2, c1)
+	u.Run()
+	c2.Operate(u)
 	time.Sleep(time.Millisecond)
-	p.SetSignalState(s2, 520)
+	fmt.Println(c2.Load())
+	firstName.Set(u, "Joke")
 	time.Sleep(time.Millisecond)
-	p.RemoveEffector(e)
-	p.SetSignalState(s1, 100)
+	fmt.Println(c2.Load())
+	firstName.Set(u, "Mike")
+	time.Sleep(time.Millisecond)
+	fmt.Println(c1.Load())
+}
+
+//You name is John.Smith
+//You name is Joke.Smith
+//Mike.Smith
+
+func TestEffector(t *testing.T) {
+	u := NewUniverse()
+	defer u.Close()
+	f := func(a any) {
+		fmt.Printf("The number is %v \n", a)
+	}
+	s1 := NewSignal(1314, f)
+	s2 := NewSignal(520, f)
+	fc := func(a ...Parent) any {
+		return a[0].Load().(int)*1000 + a[1].Load().(int)
+	}
+	c := NewComputer(f, fc, s1, s2)
+	u.Run()
+	c.Operate(u)
+	time.Sleep(time.Millisecond)
+	s1.Set(u, 100)
+	c.Operate(u)
 	time.Sleep(time.Millisecond)
 }
 
-// The count is 1314 and 2
-// The count is 1314 and 520
-func TestComputed(t *testing.T) {
-	p := NewProcessor()
-	defer p.Close()
-	firstName := p.SignalState("John")
-	lastName := p.SignalState("Smith")
-	f1 := func(a *Processor) any {
-		return GetSignal(a, firstName).(string) + "." + GetSignal(a, lastName).(string)
-	}
-	c1 := p.Computed(f1, firstName, lastName)
-	if !strings.EqualFold(p.GetComputerState(c1).(string), "John.Smith") {
-		t.Fatal(p.GetComputerState(c1))
-	}
-	f2 := func(a *Processor) any {
-		return "You name is " + GetComputer(a, c1).(string)
-	}
-	c2 := p.Computed(f2, c1)
-	p.SetSignalState(firstName, "Joke")
-	if !strings.EqualFold(p.GetComputerState(c1).(string), "Joke.Smith") {
-		t.Fatal(p.GetComputerState(c1))
-	}
-	if !strings.EqualFold(p.GetComputerState(c2).(string), "You name is Joke.Smith") {
-		t.Fatal(p.GetComputerState(c2))
-	}
-	err := p.RemoveComputer(c1)
-	if err == nil {
-		t.Fatal("错误")
-	}
-	err = p.RemoveComputer(c2)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	if p.GetComputerState(c2) != nil {
-		t.Fatal(p.GetComputerState(c2))
-	}
-	p.SetSignalState(firstName, "Mike")
-	if !strings.EqualFold(p.GetComputerState(c1).(string), "Mike.Smith") {
-		t.Fatal(p.GetComputerState(c1))
-	}
-}
+//The number is 1314520
+//The number is 100
+//The number is 100520
