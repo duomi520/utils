@@ -46,10 +46,8 @@ type Computer struct {
 	parentSignal []int
 	//求值链
 	evaluateChain []*Computer
-	//父代
-	parent []Parent
 	//求值函数
-	evaluate func(...Parent) any
+	evaluate func() any
 	//Reactions 反应 - 反应是数据更新时的监听器，监视值修改后，立即执行
 	effect func(any)
 	//false-需计算值，true-无需计算值
@@ -58,10 +56,10 @@ type Computer struct {
 }
 
 // NewComputer 线程不安全
-func NewComputer(u *Universe, effect func(any), evaluate func(...Parent) any, p ...Parent) *Computer {
+func NewComputer(u *Universe, effect func(any), warp func() (func() any, []Parent)) *Computer {
+	evaluate, p := warp()
 	c := &Computer{
 		u:        u,
-		parent:   p,
 		evaluate: evaluate,
 		effect:   effect,
 		renovate: false,
@@ -138,15 +136,19 @@ func (c *Computer) Get() any {
 	}
 	for _, v := range c.evaluateChain {
 		if !v.renovate {
-			v.evaluate(v.parent...)
+			v.eval()
 		}
 	}
-	c.value = c.evaluate(c.parent...)
+	c.eval()
+	return c.value
+}
+
+func (c *Computer) eval() {
+	c.value = c.evaluate()
 	c.renovate = true
 	if c.effect != nil {
 		c.effect(c.value)
 	}
-	return c.value
 }
 
 // String 线程不安全,需控制在evaluate函数内运行

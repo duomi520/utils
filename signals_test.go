@@ -37,14 +37,18 @@ func TestComputed(t *testing.T) {
 	defer u.Close()
 	firstName := u.NewSignal("John", nil)
 	lastName := u.NewSignal("Smith", nil)
-	f1 := func(a ...Parent) any {
-		return a[0].String() + "." + a[1].String()
+	f1 := func() (func() any, []Parent) {
+		return func() any {
+			return firstName.String() + "." + lastName.String()
+		}, []Parent{firstName, lastName}
 	}
-	c1 := NewComputer(u, nil, f1, firstName, lastName)
-	f2 := func(a ...Parent) any {
-		return "You name is " + a[0].String()
+	c1 := NewComputer(u, nil, f1)
+	f2 := func() (func() any, []Parent) {
+		return func() any {
+			return "You name is " + c1.String()
+		}, []Parent{c1}
 	}
-	c2 := NewComputer(u, nil, f2, c1)
+	c2 := NewComputer(u, nil, f2)
 	u.Run()
 	u.Operate(c2, show)
 	time.Sleep(time.Millisecond)
@@ -63,20 +67,22 @@ func TestComputed(t *testing.T) {
 func TestEffector(t *testing.T) {
 	u := NewUniverse()
 	defer u.Close()
-	effect := func(a any) {
+	watch := func(a any) {
 		fmt.Printf("The number is %v \n", a)
 	}
-	s1 := u.NewSignal(1314, effect)
-	s2 := u.NewSignal(520, effect)
-	fc := func(a ...Parent) any {
-		return a[0].Int()*1000 + a[1].Int()
+	s1 := u.NewSignal(1314, watch)
+	s2 := u.NewSignal(520, watch)
+	fc := func() (func() any, []Parent) {
+		return func() any {
+			return s1.Int()*1000 + s2.Int()
+		}, []Parent{s1, s2}
 	}
-	c := NewComputer(u, effect, fc, s1, s2)
+	c := NewComputer(u, watch, fc)
 	u.Run()
-	u.Operate(c,nil)
+	u.Operate(c, nil)
 	time.Sleep(time.Millisecond)
 	u.SetSignal(s1, 100)
-	u.Operate(c,nil)
+	u.Operate(c, nil)
 	time.Sleep(time.Millisecond)
 }
 
