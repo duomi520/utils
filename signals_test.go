@@ -6,47 +6,54 @@ import (
 	"time"
 )
 
-func TestSignal(t *testing.T) {
+func TestRemoveDuplicates(t *testing.T) {
+	nums := []int{8, 2, 7, 3, 5, 3, 4, 5}
+	uniqueNums := removeDuplicates(nums)
+	fmt.Println(uniqueNums)
+}
+
+// [2 3 4 5 7 8]
+
+func TestUniverse(t *testing.T) {
 	u := NewUniverse()
-	s := NewSignal(1314, nil)
+	defer u.Close()
+	s := u.NewSignal(1314, func(a any) {
+		fmt.Println(a)
+	})
 	u.Run()
-	if s.Load().(int) != 1314 {
-		t.Error(s.Load())
-	}
-	u.Close()
-	s.Set(u, 2321)
+	fmt.Println(u.signalValue[0])
+	u.SetSignal(s, 2321)
 	time.Sleep(time.Millisecond)
-	if s.Load().(int) != 1314 {
-		t.Error(s.Load())
-	}
-	fmt.Println(s.Load())
 }
 
 // 1314
+// 2321
 
 func TestComputed(t *testing.T) {
+	show := func(a any) {
+		fmt.Println(a)
+	}
 	u := NewUniverse()
 	defer u.Close()
-	firstName := NewSignal("John", nil)
-	lastName := NewSignal("Smith", nil)
+	firstName := u.NewSignal("John", nil)
+	lastName := u.NewSignal("Smith", nil)
 	f1 := func(a ...Parent) any {
-		return a[0].Load().(string) + "." + a[1].Load().(string)
+		return a[0].String() + "." + a[1].String()
 	}
-	c1 := NewComputer(nil, f1, firstName, lastName)
+	c1 := NewComputer(u, nil, f1, firstName, lastName)
 	f2 := func(a ...Parent) any {
-		return "You name is " + a[0].Load().(string)
+		return "You name is " + a[0].String()
 	}
-	c2 := NewComputer(nil, f2, c1)
+	c2 := NewComputer(u, nil, f2, c1)
 	u.Run()
-	c2.Operate(u)
+	u.Operate(c2, show)
 	time.Sleep(time.Millisecond)
-	fmt.Println(c2.Load())
-	firstName.Set(u, "Joke")
+	u.SetSignal(firstName, "Joke")
+	u.Operate(c2, show)
+	u.SetSignal(firstName, "Mike")
 	time.Sleep(time.Millisecond)
-	fmt.Println(c2.Load())
-	firstName.Set(u, "Mike")
+	u.Operate(c1, show)
 	time.Sleep(time.Millisecond)
-	fmt.Println(c1.Load())
 }
 
 //You name is John.Smith
@@ -56,20 +63,20 @@ func TestComputed(t *testing.T) {
 func TestEffector(t *testing.T) {
 	u := NewUniverse()
 	defer u.Close()
-	f := func(a any) {
+	effect := func(a any) {
 		fmt.Printf("The number is %v \n", a)
 	}
-	s1 := NewSignal(1314, f)
-	s2 := NewSignal(520, f)
+	s1 := u.NewSignal(1314, effect)
+	s2 := u.NewSignal(520, effect)
 	fc := func(a ...Parent) any {
-		return a[0].Load().(int)*1000 + a[1].Load().(int)
+		return a[0].Int()*1000 + a[1].Int()
 	}
-	c := NewComputer(f, fc, s1, s2)
+	c := NewComputer(u, effect, fc, s1, s2)
 	u.Run()
-	c.Operate(u)
+	u.Operate(c,nil)
 	time.Sleep(time.Millisecond)
-	s1.Set(u, 100)
-	c.Operate(u)
+	u.SetSignal(s1, 100)
+	u.Operate(c,nil)
 	time.Sleep(time.Millisecond)
 }
 

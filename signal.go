@@ -2,17 +2,16 @@ package utils
 
 import (
 	"fmt"
-	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-var globalIncreases int64
-
 type Parent interface {
-	Load() any
+	Get() any
+	String() string
+	Int() int
 }
 
 // Signal 信号-状态单向传播
@@ -20,149 +19,166 @@ type Parent interface {
 // 采用所谓的 “推后拉” 模型：“推” 阶段，在 Signal 变为 “脏”（即其值发生了改变）时，会递归地把 “脏” 状态传递到依赖它的所有计算函数Computer上，所有潜在的重新计算都被推迟，直到显式地 Operate 某个 Computer 的值。
 
 type Signal struct {
-	//去重标记
-	id int64
-	atomic.Value
-	//所有的后代
-	child []*Computer
-	//Reactions 反应 - 反应是数据更新时的监听器，监视值修改后，立即执行
-	effect func(any)
+	index int
+	u     *Universe
 }
 
-// 线程不安全
-func NewSignal(v any, do func(any)) *Signal {
-	s := &Signal{
-		id:     atomic.AddInt64(&globalIncreases, 1),
-		effect: do,
-	}
-	s.Store(v)
-	return s
+// Get 线程不安全,需控制在evaluate函数内运行
+func (s Signal) Get() any {
+	return s.u.signalValue[s.index]
 }
 
-// Set 非原子性，有一定的延迟。
-func (s *Signal) Set(u *Universe, a any) {
-	if atomic.LoadInt32(&u.stopFlag) != 0 {
-		u.SetSignalChan <- setSignalMsg{s, a}
-	}
+// String 线程不安全,需控制在evaluate函数内运行
+func (s Signal) String() string {
+	return s.u.signalValue[s.index].(string)
+}
+
+// Int 线程不安全,需控制在evaluate函数内运行
+func (s Signal) Int() int {
+	return s.u.signalValue[s.index].(int)
 }
 
 // Computer 衍生 - 衍生能缓存计算结果，避免重复的计算
 // 惰性求值（lazy evaluate）- 只有被使用到的才会计算结果
 type Computer struct {
-	//去重标记
-	id int64
-	//计算层
-	tier int32
+	u *Universe
 	//所有的Signal父代
-	allParentSignal []*Signal
-	//所有的Computer父代
-	allParentComputer []*Computer
-	//false-需计算值，true-无需计算值
-	renovate bool
-	value    any
-	//上一个父代
+	parentSignal []int
+	//求值链
+	evaluateChain []*Computer
+	//父代
 	parent []Parent
 	//求值函数
 	evaluate func(...Parent) any
 	//Reactions 反应 - 反应是数据更新时的监听器，监视值修改后，立即执行
 	effect func(any)
+	//false-需计算值，true-无需计算值
+	renovate bool
+	value    any
 }
 
-type ByTier []*Computer
-
-func (t ByTier) Len() int           { return len(t) }
-func (t ByTier) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t ByTier) Less(i, j int) bool { return t[i].tier < t[j].tier }
-
 // NewComputer 线程不安全
-func NewComputer(effect func(any), evaluate func(...Parent) any, p ...Parent) *Computer {
+func NewComputer(u *Universe, effect func(any), evaluate func(...Parent) any, p ...Parent) *Computer {
 	c := &Computer{
-		id:       atomic.AddInt64(&globalIncreases, 1),
-		renovate: false,
+		u:        u,
 		parent:   p,
 		evaluate: evaluate,
 		effect:   effect,
+		renovate: false,
 	}
 	for _, v := range p {
 		switch p := v.(type) {
-		case *Signal:
-			p.child = append(p.child, c)
-			c.allParentSignal = append(c.allParentSignal, p)
+		case Signal:
+			u.signalChild[p.index] = append(u.signalChild[p.index], c)
+			c.parentSignal = append(c.parentSignal, p.index)
+			if p.u != u {
+				panic("NewComputer: Signal不同Universe")
+			}
 		case *Computer:
-			c.allParentComputer = append(c.allParentComputer, p.allParentComputer...)
-			c.allParentSignal = append(c.allParentSignal, p.allParentSignal...)
+			if p.u != u {
+				panic("NewComputer: Computer不同Universe")
+			}
+			c.parentSignal = append(c.parentSignal, p.parentSignal...)
+			for _, i := range c.parentSignal {
+				u.signalChild[i] = append(u.signalChild[i], c)
+			}
+			c.evaluateChain = append(c.evaluateChain, p.evaluateChain...)
+			c.evaluateChain = append(c.evaluateChain, p)
 		default:
 			panic(fmt.Sprintf("NewComputer: 无效的参数类型:%v", v))
 		}
-
 	}
-	//allParentSignal去重
-	if len(c.allParentSignal) > 0 {
-		slices.SortFunc(c.allParentSignal, func(a, b *Signal) int {
-			return int(a.id - b.id)
-		})
-		var ps []*Signal
-		for i := 1; i < len(c.allParentSignal); i++ {
-			if c.allParentSignal[i].id != c.allParentSignal[i-1].id {
-				ps = append(ps, c.allParentSignal[i])
-			}
-		}
-		c.allParentSignal = ps
-	}
-	//allParentComputer去重
-	if len(c.allParentComputer) > 0 {
-		//allParentComputer去重
-		slices.SortFunc(c.allParentComputer, func(a, b *Computer) int {
-			return int(a.id - b.id)
-		})
-		var pc []*Computer
-		for i := 1; i < len(c.allParentComputer); i++ {
-			if c.allParentComputer[i].id != c.allParentComputer[i-1].id {
-				pc = append(pc, c.allParentComputer[i])
-			}
-		}
-		c.allParentComputer = pc
-		//allParentComputer排序
-		sort.Sort(ByTier(c.allParentComputer))
-		//设置计算层
-		c.tier = c.allParentComputer[len(c.allParentComputer)-1].tier + 1
-	}
+	c.parentSignal = removeDuplicates(c.parentSignal)
+	c.evaluateChain = uniqueWithoutSorting(c.evaluateChain)
 	return c
 }
 
-// Load 线程不安全,需控制在evaluate函数内运行
-func (c *Computer) Load() any {
+// removeDuplicates 排序去重
+func removeDuplicates(s []int) []int {
+	if len(s) == 0 {
+		return nil
+	}
+	// 先排序
+	sort.Ints(s)
+	// k用来记录不重复元素的索引位置
+	k := 0
+	for i := 1; i < len(s); i++ {
+		if s[k] != s[i] {
+			k++
+			// 将不重复的元素移到数组前面
+			s[k] = s[i]
+		}
+	}
+	// 返回不重复元素的部分切片
+	return s[:k+1]
+}
+
+// uniqueWithoutSorting 去重但不排序
+func uniqueWithoutSorting(s []*Computer) []*Computer {
+	if len(s) == 0 {
+		return nil
+	}
+	// 使用map来记录元素是否已经出现过
+	seen := make(map[*Computer]bool)
+	var result []*Computer
+	for _, value := range s {
+		// 如果这个值没有在map中出现过，就添加到结果切片中
+		if _, ok := seen[value]; !ok {
+			seen[value] = true
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+// Get 线程不安全,需控制在evaluate函数内运行
+func (c *Computer) Get() any {
 	if c.renovate {
 		return c.value
 	}
-	for _, v := range c.allParentComputer {
+	for _, v := range c.evaluateChain {
 		if !v.renovate {
 			v.evaluate(v.parent...)
 		}
 	}
 	c.value = c.evaluate(c.parent...)
+	c.renovate = true
+	if c.effect != nil {
+		c.effect(c.value)
+	}
 	return c.value
 }
 
-// Operate 非原子性，有一定的延迟。
-func (c *Computer) Operate(u *Universe) {
-	if atomic.LoadInt32(&u.stopFlag) != 0 {
-		u.ComputerChan <- c
-	}
+// String 线程不安全,需控制在evaluate函数内运行
+func (c *Computer) String() string {
+	return c.Get().(string)
+}
+
+// Int 线程不安全,需控制在evaluate函数内运行
+func (c *Computer) Int() int {
+	return c.Get().(int)
 }
 
 type setSignalMsg struct {
-	signal *Signal
-	val    any
+	index int
+	val   any
+}
+
+type operateComputerMsg struct {
+	c  *Computer
+	do func(any)
 }
 
 // Universe 响应式状态管理,放置在一同协程中运算，规避锁的影响
 // 适用于生产者慢，消费者快的场景
 
 type Universe struct {
-	SetSignalChan chan setSignalMsg
-	ComputerChan  chan *Computer
-	closeOnce     sync.Once
+	signalValue         []any
+	signalEffect        []func(any)
+	signalChild         [][]*Computer
+	setSignalChan       chan setSignalMsg
+	operateComputerChan chan operateComputerMsg
+	closeOnce           sync.Once
 	// 0: stop 1: live
 	stopFlag int32
 	stopChan chan struct{}
@@ -170,41 +186,12 @@ type Universe struct {
 
 func NewUniverse() *Universe {
 	u := &Universe{
-		SetSignalChan: make(chan setSignalMsg, 128),
-		ComputerChan:  make(chan *Computer, 128),
-		stopFlag:      1,
-		stopChan:      make(chan struct{}),
+		setSignalChan:       make(chan setSignalMsg, 128),
+		operateComputerChan: make(chan operateComputerMsg, 128),
+		stopFlag:            1,
+		stopChan:            make(chan struct{}),
 	}
 	return u
-}
-
-func (u *Universe) Run() {
-	go func() {
-		for {
-			select {
-			case msg := <-u.SetSignalChan:
-				msg.signal.Store(msg.val)
-				for _, v := range msg.signal.child {
-					v.renovate = false
-				}
-				if msg.signal.effect != nil {
-					msg.signal.effect(msg.signal.Load())
-				}
-			case c := <-u.ComputerChan:
-				if c.renovate {
-					if c.effect != nil {
-						c.effect(c.value)
-					}
-				} else {
-					if c.effect != nil {
-						c.effect(c.Load())
-					}
-				}
-			case <-u.stopChan:
-				return
-			}
-		}
-	}()
 }
 
 // Close 关闭
@@ -213,9 +200,64 @@ func (u *Universe) Close() {
 		atomic.StoreInt32(&u.stopFlag, 0)
 		close(u.stopChan)
 		time.Sleep(3 * time.Second)
-		close(u.SetSignalChan)
-		close(u.ComputerChan)
+		u.signalValue = nil
+		u.signalEffect = nil
+		u.signalChild = nil
+		close(u.setSignalChan)
+		close(u.operateComputerChan)
 	})
+}
+
+// 线程不安全
+func (u *Universe) NewSignal(v any, effect func(any)) Signal {
+	u.signalValue = append(u.signalValue, v)
+	u.signalEffect = append(u.signalEffect, effect)
+	u.signalChild = append(u.signalChild, make([]*Computer, 0, 16))
+	return Signal{index: len(u.signalEffect) - 1, u: u}
+}
+
+// SetSignal 非原子性，乱序执行。
+func (u *Universe) SetSignal(s Signal, a any) {
+	if atomic.LoadInt32(&u.stopFlag) != 0 {
+		u.setSignalChan <- setSignalMsg{s.index, a}
+	}
+}
+
+// Operate 非原子性，乱序执行。
+func (u *Universe) Operate(c *Computer, do func(any)) {
+	if atomic.LoadInt32(&u.stopFlag) != 0 {
+		u.operateComputerChan <- operateComputerMsg{c: c, do: do}
+	}
+}
+
+func (u *Universe) Run() {
+	if len(u.signalChild) > 0 {
+		for i := range u.signalChild {
+			u.signalChild[i] = uniqueWithoutSorting(u.signalChild[i])
+		}
+	}
+	go func() {
+		for {
+			select {
+			case msg := <-u.setSignalChan:
+				u.signalValue[msg.index] = msg.val
+				for _, v := range u.signalChild[msg.index] {
+					v.renovate = false
+				}
+				if u.signalEffect[msg.index] != nil {
+					u.signalEffect[msg.index](msg.val)
+				}
+			case msg := <-u.operateComputerChan:
+				if msg.do != nil {
+					msg.do(msg.c.Get())
+				} else {
+					msg.c.Get()
+				}
+			case <-u.stopChan:
+				return
+			}
+		}
+	}()
 }
 
 // https://zhuanlan.zhihu.com/p/691797618

@@ -19,19 +19,26 @@ func AllocSlice() *[]byte {
 	return &b
 }
 func FreeSlice(x *[]byte) {
+	// 重置切片长度为 0
+	*x = (*x)[:0]
 	defaultSlicePool.Put(x)
 }
 
 func AllocBuffer() *bytes.Buffer {
 	v := defaultByteBufferPool.Get()
 	if v != nil {
-		return v.(*bytes.Buffer)
+		buf := v.(*bytes.Buffer)
+		// 重置 Buffer
+		buf.Reset()
+		return buf
 	}
 	b := make([]byte, 0, atomic.LoadUint64(&defaultByteSize))
 	return bytes.NewBuffer(b)
 }
 
 func FreeBuffer(x *bytes.Buffer) {
+	// 重置 Buffer
+	x.Reset()
 	defaultByteBufferPool.Put(x)
 }
 
@@ -40,3 +47,4 @@ func ChangeDefaultByteSize(n uint64) {
 }
 
 // https://github.com/valyala/bytebufferpool
+// https://github.com/oxtoacart/bpool
