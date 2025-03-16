@@ -89,10 +89,7 @@ func FormatRecover() ([]byte, any) {
 	if r := recover(); r != nil {
 		const size = 65536
 		buf := make([]byte, size)
-		end := runtime.Stack(buf, false)
-		if end > size {
-			end = size
-		}
+		end := min(runtime.Stack(buf, false), size)
 		return buf[:end], r
 	}
 	return nil, nil

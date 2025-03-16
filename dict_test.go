@@ -11,13 +11,13 @@ var testValue []string = []string{"a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"
 
 func TestDict(t *testing.T) {
 	var d MetaDict[string]
-	for i := 0; i < len(testKey); i++ {
+	for i := range testKey {
 		d = d.Set(testKey[i], testValue[i])
 	}
 	if d.Len() != 10 {
 		t.Error("len != 10")
 	}
-	for i := 0; i < len(testKey); i++ {
+	for i := range testKey {
 		value, _ := d.Get(testKey[i])
 		if value != testValue[i] {
 			t.Error(value, testValue[i])
@@ -39,7 +39,7 @@ func TestDict(t *testing.T) {
 
 func TestDictCode(t *testing.T) {
 	var d MetaDict[string]
-	for i := 0; i < len(testKey); i++ {
+	for i := range testKey {
 		d = d.Set(testKey[i], testValue[i])
 	}
 	buf := MetaDictEncode(d)
@@ -69,7 +69,7 @@ func TestDictCode(t *testing.T) {
 func BenchmarkTestDict(b *testing.B) {
 	var d MetaDict[string]
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < 10; j++ {
+		for j := range 10 {
 			d = d.Set(testKey[j], testValue[j])
 			d.Get(testKey[j])
 		}
@@ -78,7 +78,7 @@ func BenchmarkTestDict(b *testing.B) {
 func BenchmarkTestMap(b *testing.B) {
 	m := make(map[string]string, 16)
 	for i := 0; i < b.N; i++ {
-		for j := 0; j < 10; j++ {
+		for j := range 10 {
 			m[testKey[j]] = testValue[j]
 			_ = m[testKey[j]]
 		}

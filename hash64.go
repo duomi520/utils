@@ -144,7 +144,7 @@ var prime64 uint64 = 1099511628211
 // FNV-1a算法
 func Hash64FNV1A[T string | []byte](data T) uint64 {
 	var result uint64 = 14695981039346656037
-	for i := 0; i < len(data); i++ {
+	for i := range len(data) {
 		result ^= uint64(data[i])
 		result *= prime64
 	}

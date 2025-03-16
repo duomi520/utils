@@ -49,3 +49,4 @@ func (ic *IdempotentCache[T]) Get(in T) any {
 }
 
 // https://github.com/cespare/xxhash
+// https://zhuanlan.zhihu.com/p/624248354

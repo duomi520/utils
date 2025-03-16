@@ -73,12 +73,12 @@ func MetaDictEncode(m MetaDict[string]) []byte {
 		return nil
 	}
 	n := 0
-	for i := 0; i < size; i++ {
+	for i := range size {
 		n += 1 + 8 + len(m.Value[i])
 	}
 	buf := make([]byte, n)
 	idx := 0
-	for i := 0; i < size; i++ {
+	for i := range size {
 		buf[idx] = byte(1 + 8 + len(m.Value[i]))
 		idx++
 		binary.LittleEndian.PutUint64(buf[idx:], m.Key[i])
@@ -95,7 +95,7 @@ func MetaDictEncoder(m MetaDict[string], w io.Writer) error {
 		return nil
 	}
 	var buf [9]byte
-	for i := 0; i < size; i++ {
+	for i := range size {
 		buf[0] = byte(1 + 8 + len(m.Value[i]))
 		binary.LittleEndian.PutUint64(buf[1:], m.Key[i])
 		_, err := w.Write(buf[:])

@@ -1,51 +1,29 @@
 package utils
 
 import (
-	"fmt"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type Parent interface {
-	Get() any
-	String() string
-	Int() int
-}
-
 // Signal 信号-状态单向传播
 // 一个数据的容器，当它存储的数据改变时，依赖于这个 Signal 的计算函数Computer标注“脏” 状态、副作用Effector可以自动运行
 // 采用所谓的 “推后拉” 模型：“推” 阶段，在 Signal 变为 “脏”（即其值发生了改变）时，会递归地把 “脏” 状态传递到依赖它的所有计算函数Computer上，所有潜在的重新计算都被推迟，直到显式地 Operate 某个 Computer 的值。
 
-type Signal struct {
-	index int
-	u     *Universe
-}
-
-// Get 线程不安全,需控制在evaluate函数内运行
-func (s Signal) Get() any {
-	return s.u.signalValue[s.index]
-}
-
-// String 线程不安全,需控制在evaluate函数内运行
-func (s Signal) String() string {
-	return s.u.signalValue[s.index].(string)
-}
-
-// Int 线程不安全,需控制在evaluate函数内运行
-func (s Signal) Int() int {
-	return s.u.signalValue[s.index].(int)
+type signal struct {
+	value  any
+	effect func(any)
+	child  []int
 }
 
 // Computer 衍生 - 衍生能缓存计算结果，避免重复的计算
 // 惰性求值（lazy evaluate）- 只有被使用到的才会计算结果
-type Computer struct {
-	u *Universe
+
+type computer struct {
 	//所有的Signal父代
 	parentSignal []int
 	//求值链
-	evaluateChain []*Computer
+	evaluateChain []int
 	//求值函数
 	evaluate func() any
 	//Reactions 反应 - 反应是数据更新时的监听器，监视值修改后，立即执行
@@ -55,110 +33,12 @@ type Computer struct {
 	value    any
 }
 
-// NewComputer 线程不安全
-func NewComputer(u *Universe, effect func(any), warp func() (func() any, []Parent)) *Computer {
-	evaluate, p := warp()
-	c := &Computer{
-		u:        u,
-		evaluate: evaluate,
-		effect:   effect,
-		renovate: false,
-	}
-	for _, v := range p {
-		switch p := v.(type) {
-		case Signal:
-			u.signalChild[p.index] = append(u.signalChild[p.index], c)
-			c.parentSignal = append(c.parentSignal, p.index)
-			if p.u != u {
-				panic("NewComputer: Signal不同Universe")
-			}
-		case *Computer:
-			if p.u != u {
-				panic("NewComputer: Computer不同Universe")
-			}
-			c.parentSignal = append(c.parentSignal, p.parentSignal...)
-			for _, i := range c.parentSignal {
-				u.signalChild[i] = append(u.signalChild[i], c)
-			}
-			c.evaluateChain = append(c.evaluateChain, p.evaluateChain...)
-			c.evaluateChain = append(c.evaluateChain, p)
-		default:
-			panic(fmt.Sprintf("NewComputer: 无效的参数类型:%v", v))
-		}
-	}
-	c.parentSignal = removeDuplicates(c.parentSignal)
-	c.evaluateChain = uniqueWithoutSorting(c.evaluateChain)
-	return c
-}
-
-// removeDuplicates 排序去重
-func removeDuplicates(s []int) []int {
-	if len(s) == 0 {
-		return nil
-	}
-	// 先排序
-	sort.Ints(s)
-	// k用来记录不重复元素的索引位置
-	k := 0
-	for i := 1; i < len(s); i++ {
-		if s[k] != s[i] {
-			k++
-			// 将不重复的元素移到数组前面
-			s[k] = s[i]
-		}
-	}
-	// 返回不重复元素的部分切片
-	return s[:k+1]
-}
-
-// uniqueWithoutSorting 去重但不排序
-func uniqueWithoutSorting(s []*Computer) []*Computer {
-	if len(s) == 0 {
-		return nil
-	}
-	// 使用map来记录元素是否已经出现过
-	seen := make(map[*Computer]bool)
-	var result []*Computer
-	for _, value := range s {
-		// 如果这个值没有在map中出现过，就添加到结果切片中
-		if _, ok := seen[value]; !ok {
-			seen[value] = true
-			result = append(result, value)
-		}
-	}
-	return result
-}
-
-// Get 线程不安全,需控制在evaluate函数内运行
-func (c *Computer) Get() any {
-	if c.renovate {
-		return c.value
-	}
-	for _, v := range c.evaluateChain {
-		if !v.renovate {
-			v.eval()
-		}
-	}
-	c.eval()
-	return c.value
-}
-
-func (c *Computer) eval() {
+func (c *computer) eval() {
 	c.value = c.evaluate()
 	c.renovate = true
 	if c.effect != nil {
 		c.effect(c.value)
 	}
-}
-
-// String 线程不安全,需控制在evaluate函数内运行
-func (c *Computer) String() string {
-	return c.Get().(string)
-}
-
-// Int 线程不安全,需控制在evaluate函数内运行
-func (c *Computer) Int() int {
-	return c.Get().(int)
 }
 
 type setSignalMsg struct {
@@ -167,7 +47,7 @@ type setSignalMsg struct {
 }
 
 type operateComputerMsg struct {
-	c  *Computer
+	c  int
 	do func(any)
 }
 
@@ -175,9 +55,8 @@ type operateComputerMsg struct {
 // 适用于生产者慢，消费者快的场景
 
 type Universe struct {
-	signalValue         []any
-	signalEffect        []func(any)
-	signalChild         [][]*Computer
+	signalSet           []signal
+	computerSet         []computer
 	setSignalChan       chan setSignalMsg
 	operateComputerChan chan operateComputerMsg
 	closeOnce           sync.Once
@@ -188,6 +67,10 @@ type Universe struct {
 
 func NewUniverse() *Universe {
 	u := &Universe{
+		//signalSet[0] 不使用
+		signalSet: make([]signal, 1),
+		//computerSet[0] 不使用
+		computerSet:         make([]computer, 1),
 		setSignalChan:       make(chan setSignalMsg, 128),
 		operateComputerChan: make(chan operateComputerMsg, 128),
 		stopFlag:            1,
@@ -202,58 +85,116 @@ func (u *Universe) Close() {
 		atomic.StoreInt32(&u.stopFlag, 0)
 		close(u.stopChan)
 		time.Sleep(3 * time.Second)
-		u.signalValue = nil
-		u.signalEffect = nil
-		u.signalChild = nil
+		u.signalSet = nil
+		u.computerSet = nil
 		close(u.setSignalChan)
 		close(u.operateComputerChan)
 	})
 }
 
 // 线程不安全
-func (u *Universe) NewSignal(v any, effect func(any)) Signal {
-	u.signalValue = append(u.signalValue, v)
-	u.signalEffect = append(u.signalEffect, effect)
-	u.signalChild = append(u.signalChild, make([]*Computer, 0, 16))
-	return Signal{index: len(u.signalEffect) - 1, u: u}
+func (u *Universe) NewSignal(v any, effect func(any)) int {
+	u.signalSet = append(u.signalSet, signal{value: v, effect: effect})
+	return -len(u.signalSet) + 1
 }
 
 // SetSignal 非原子性，乱序执行。
-func (u *Universe) SetSignal(s Signal, a any) {
+func (u *Universe) SetSignal(n int, a any) {
 	if atomic.LoadInt32(&u.stopFlag) != 0 {
-		u.setSignalChan <- setSignalMsg{s.index, a}
+		u.setSignalChan <- setSignalMsg{n, a}
 	}
 }
 
+// GetSignal 线程不安全,需控制在evaluate函数内运行
+func (u *Universe) GetSignal(n int) any {
+	return u.signalSet[-n].value
+}
+
+// GetComputer 线程不安全,需控制在evaluate函数内运行
+func (u *Universe) GetComputer(n int) any {
+	c := &u.computerSet[n]
+	if c.renovate {
+		return c.value
+	}
+	for _, v := range c.evaluateChain {
+		k := &u.computerSet[v]
+		if !k.renovate {
+			k.eval()
+		}
+	}
+	c.eval()
+	return c.value
+}
+
+// NewComputer 线程不安全
+func (u *Universe) NewComputer(effect func(any), warp func(*Universe) (func() any, []int)) int {
+	evaluate, p := warp(u)
+	c := computer{
+		evaluate: evaluate,
+		effect:   effect,
+		renovate: false,
+	}
+	j := len(u.computerSet)
+	for _, v := range p {
+		if v == 0 {
+			panic("NewComputer: 不为0")
+		}
+		// 正负用于判断 signal 或 computer
+		if v < 0 {
+			ss := &u.signalSet[-v]
+			ss.child = append(ss.child, j)
+			c.parentSignal = append(c.parentSignal, v)
+		} else {
+			k := u.computerSet[v]
+			c.parentSignal = append(c.parentSignal, k.parentSignal...)
+			for _, i := range c.parentSignal {
+				ss := &u.signalSet[-i]
+				ss.child = append(ss.child, j)
+			}
+			c.evaluateChain = append(c.evaluateChain, k.evaluateChain...)
+			c.evaluateChain = append(c.evaluateChain, v)
+		}
+	}
+	c.parentSignal = RemoveDuplicates(c.parentSignal)
+	c.evaluateChain = UniqueWithoutSort(c.evaluateChain)
+	u.computerSet = append(u.computerSet, c)
+	return j
+}
+
 // Operate 非原子性，乱序执行。
-func (u *Universe) Operate(c *Computer, do func(any)) {
+func (u *Universe) Operate(n int, do func(any)) {
 	if atomic.LoadInt32(&u.stopFlag) != 0 {
-		u.operateComputerChan <- operateComputerMsg{c: c, do: do}
+		u.operateComputerChan <- operateComputerMsg{c: n, do: do}
 	}
 }
 
 func (u *Universe) Run() {
-	if len(u.signalChild) > 0 {
-		for i := range u.signalChild {
-			u.signalChild[i] = uniqueWithoutSorting(u.signalChild[i])
+	if len(u.signalSet) > 1 {
+		for i := range u.signalSet[1:] {
+			ss := &u.signalSet[i]
+			ss.child = UniqueWithoutSort(ss.child)
 		}
+	}
+	for i := range u.computerSet[1:] {
+		u.computerSet[i].parentSignal = nil
 	}
 	go func() {
 		for {
 			select {
 			case msg := <-u.setSignalChan:
-				u.signalValue[msg.index] = msg.val
-				for _, v := range u.signalChild[msg.index] {
-					v.renovate = false
+				s := &u.signalSet[-msg.index]
+				s.value = msg.val
+				for _, v := range s.child {
+					u.computerSet[v].renovate = false
 				}
-				if u.signalEffect[msg.index] != nil {
-					u.signalEffect[msg.index](msg.val)
+				if s.effect != nil {
+					s.effect(msg.val)
 				}
 			case msg := <-u.operateComputerChan:
 				if msg.do != nil {
-					msg.do(msg.c.Get())
+					msg.do(u.GetComputer(msg.c))
 				} else {
-					msg.c.Get()
+					u.GetComputer(msg.c)
 				}
 			case <-u.stopChan:
 				return

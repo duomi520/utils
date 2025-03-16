@@ -28,13 +28,14 @@ func BenchmarkSyncMap(b *testing.B) {
 func BenchmarkIdempotentCacheGet(b *testing.B) {
 	fn := func(s string) any {
 		var compute int
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			compute = len(s) ^ i
 		}
 		return compute
 	}
 	ic := &IdempotentCache[string]{}
 	ic.Init(5, 0x0102030405060708, fn)
+	ic.Get("127.0.0.1")
 	for i := 0; i < b.N; i++ {
 		ic.Get("127.0.0.1")
 	}
