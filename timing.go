@@ -54,6 +54,7 @@ func NewTiming(p func(error)) *Timing {
 		AddTaskChan:  make(chan task, 128),
 		stopChan:     make(chan struct{}),
 	}
+	heap.Init(&t.queue)
 	go t.run()
 	return &t
 }
@@ -90,7 +91,6 @@ func (t *Timing) AddTask(next time.Time, f func() time.Duration) error {
 func (t *Timing) run() {
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
-	heap.Init(&t.queue)
 	var interval time.Duration = 64 * 365 * 24 * time.Hour
 	for {
 		select {

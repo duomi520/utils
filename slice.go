@@ -42,3 +42,5 @@ func UniqueWithoutSort[T comparable](s []T) []T {
 	}
 	return result
 }
+
+// https://github.com/samber/lo

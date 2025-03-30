@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"log"
 	"testing"
 )
 
@@ -14,7 +13,7 @@ func (l lockListTemp) equal(obj any) bool {
 }
 func TestCopyOnWriteList(t *testing.T) {
 	l := NewCopyOnWriteList()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		l.Add(lockListTemp{i})
 	}
 	var tests = []struct {
@@ -31,20 +30,21 @@ func TestCopyOnWriteList(t *testing.T) {
 		l.Remove(lockListTemp{v.arg}.equal)
 		temp := l.List()
 		if len(v.result) != len(l.List()) {
-			log.Fatalln(v, temp)
+			t.Fatal(v, temp)
 		}
 		for i := range temp {
 			if v.result[i] != temp[i].(lockListTemp).i {
-				log.Fatalln(i, v, temp)
+				t.Fatal(i, v, temp)
 			}
 		}
 	}
 }
 func BenchmarkCopyOnWriteList(b *testing.B) {
 	l := NewCopyOnWriteList()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		l.Add(lockListTemp{i})
 	}
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = l.List()
 	}

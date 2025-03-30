@@ -100,30 +100,45 @@ func (u *Universe) NewSignal(v any, effect func(any)) int {
 
 // SetSignal 非原子性，乱序执行。
 func (u *Universe) SetSignal(n int, a any) {
+	if n > -1 {
+		panic("SetSignal: Signal不大于-1")
+	}
 	if atomic.LoadInt32(&u.stopFlag) != 0 {
 		u.setSignalChan <- setSignalMsg{n, a}
 	}
 }
 
-// GetSignal 线程不安全,需控制在evaluate函数内运行
-func (u *Universe) GetSignal(n int) any {
-	return u.signalSet[-n].value
-}
-
-// GetComputer 线程不安全,需控制在evaluate函数内运行
-func (u *Universe) GetComputer(n int) any {
-	c := &u.computerSet[n]
-	if c.renovate {
+// Get 线程不安全,需控制在evaluate函数内运行
+func (u *Universe) Get(n int) any {
+	if n == 0 {
+		panic("Get: n不为0")
+	}
+	if n < 0 {
+		return u.signalSet[-n].value
+	} else {
+		c := &u.computerSet[n]
+		if c.renovate {
+			return c.value
+		}
+		for _, v := range c.evaluateChain {
+			k := &u.computerSet[v]
+			if !k.renovate {
+				k.eval()
+			}
+		}
+		c.eval()
 		return c.value
 	}
-	for _, v := range c.evaluateChain {
-		k := &u.computerSet[v]
-		if !k.renovate {
-			k.eval()
-		}
-	}
-	c.eval()
-	return c.value
+}
+
+// GetInt 线程不安全,需控制在evaluate函数内运行
+func (u *Universe) GetInt(n int) int {
+	return u.Get(n).(int)
+}
+
+// GetString 线程不安全,需控制在evaluate函数内运行
+func (u *Universe) GetString(n int) string {
+	return u.Get(n).(string)
 }
 
 // NewComputer 线程不安全
@@ -163,6 +178,9 @@ func (u *Universe) NewComputer(effect func(any), warp func(*Universe) (func() an
 
 // Operate 非原子性，乱序执行。
 func (u *Universe) Operate(n int, do func(any)) {
+	if n < 1 {
+		panic("Operate: Computer不小于1")
+	}
 	if atomic.LoadInt32(&u.stopFlag) != 0 {
 		u.operateComputerChan <- operateComputerMsg{c: n, do: do}
 	}
@@ -192,9 +210,9 @@ func (u *Universe) Run() {
 				}
 			case msg := <-u.operateComputerChan:
 				if msg.do != nil {
-					msg.do(u.GetComputer(msg.c))
+					msg.do(u.Get(msg.c))
 				} else {
-					u.GetComputer(msg.c)
+					u.Get(msg.c)
 				}
 			case <-u.stopChan:
 				return

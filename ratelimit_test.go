@@ -10,6 +10,7 @@ func BenchmarkWait(b *testing.B) {
 	t := NewTokenBucketLimiter(1000, 16*1024, 10*time.Millisecond)
 	defer t.Close()
 	time.Sleep(10 * time.Millisecond)
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		t.Take(1)
 	}
@@ -22,7 +23,7 @@ func TestAllowed(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	count := 0
 	fmt.Println(count, limiter)
-	for i := 0; i < 500; i++ {
+	for range 500 {
 		if err := limiter.Take(1); err == nil {
 			count++
 		}
@@ -30,7 +31,7 @@ func TestAllowed(t *testing.T) {
 	fmt.Println(count, limiter)
 	time.Sleep(100 * time.Millisecond)
 	fmt.Println(count, limiter)
-	for i := 0; i < 500; i++ {
+	for range 500 {
 		if err := limiter.Take(1); err == nil {
 			count++
 		}
@@ -38,17 +39,19 @@ func TestAllowed(t *testing.T) {
 	fmt.Println(count, limiter)
 }
 
-//0 &{100 200 100ms 200 0}
-//200 &{100 200 100ms 0 0}
-//200 &{100 200 100ms 100 0}
-//300 &{100 200 100ms 0 0}
+/*
+0 &{100 200 100ms [0 0 0 0 0 0 0] 200 0}
+200 &{100 200 100ms [0 0 0 0 0 0 0] 0 0}
+200 &{100 200 100ms [0 0 0 0 0 0 0] 100 0}
+300 &{100 200 100ms [0 0 0 0 0 0 0] 0 0}
+*/
 
 func TestTake(t *testing.T) {
 	limiter := NewTokenBucketLimiter(2, 4, 10*time.Millisecond)
 	defer limiter.Close()
 	go limiter.Run()
 	time.Sleep(10 * time.Millisecond)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		prev := time.Now()
 		if err := limiter.Take(3); err != nil {
 			fmt.Println(i, time.Since(prev), limiter.tokens, err.Error())

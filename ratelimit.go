@@ -15,6 +15,8 @@ type TokenBucketLimiter struct {
 	LimitSize int64
 	//加入的时间间隔
 	Snippet time.Duration
+	//Padding
+	_ [7]int64
 	//令牌
 	tokens int64
 	//退出标志 1-退出
@@ -94,9 +96,3 @@ func (t *TokenBucketLimiter) Close() {
 // https://github.com/uber-go/ratelimit
 // https://mp.weixin.qq.com/s/T_LvVfAOzgANO1XSCViJrw
 // https://mp.weixin.qq.com/s/YCvUTwpe0jUdwcKyQQj7hA
-
-// TODO
-// https://pandaychen.github.io/2020/07/12/KRATOS-LIMITER/
-// https://github.com/alibaba/Sentinel/wiki/%E7%B3%BB%E7%BB%9F%E8%87%AA%E9%80%82%E5%BA%94%E9%99%90%E6%B5%81
-// https://segmentfault.com/a/1190000041950209
-// https://my.oschina.net/u/4545365/blog/5281780

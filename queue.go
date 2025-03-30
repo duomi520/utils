@@ -2,6 +2,7 @@ package utils
 
 import (
 	"runtime"
+	"slices"
 	"sync/atomic"
 )
 
@@ -25,7 +26,7 @@ func (l *CopyOnWriteList) Add(element any) {
 	for {
 		if atomic.CompareAndSwapInt64(&l.mutex, 0, 1) {
 			base := l.slice.Load().([]any)
-			data := append([]any{}, base...)
+			data := slices.Clone(base)
 			data = append(data, element)
 			l.slice.Store(data)
 			atomic.StoreInt64(&l.mutex, 0)

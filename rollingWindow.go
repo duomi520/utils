@@ -5,13 +5,6 @@ import (
 	"time"
 )
 
-type RollingBucket interface {
-	New(int)
-	Add(int, []int64)
-	Store(int, []int64)
-	Metric(*RollingWindow, time.Duration) func() time.Duration
-}
-
 // RollingWindow 环形滑动窗口统计
 type RollingWindow struct {
 	//环形窗口总数
@@ -23,12 +16,16 @@ type RollingWindow struct {
 	//2^3=8,2^10=1024 例：1024*1024*8=8,388,608 约8ms  10+10+3=23
 	bucketleghthPow, ringPow int
 	mask                     int64
-	array                    RollingBucket
+	array                    []int64
 	round                    []int64
+	//Padding
+	_ [7]int64
+	//0 表示未锁定，非1表示锁定
+	spinLock int64
 }
 
 // NewRollingWindow
-func NewRollingWindow(totalPow, interval, bucketleghthPow int, a RollingBucket) *RollingWindow {
+func NewRollingWindow(totalPow, interval, bucketleghthPow int) *RollingWindow {
 	r := &RollingWindow{
 		bucketsCount:    1 << totalPow,
 		interval:        interval,
@@ -36,27 +33,47 @@ func NewRollingWindow(totalPow, interval, bucketleghthPow int, a RollingBucket) 
 		ringPow:         bucketleghthPow + totalPow,
 		mask:            1<<(bucketleghthPow+totalPow) - 1,
 	}
-	r.array = a
+	r.array = make([]int64, r.bucketsCount)
 	r.round = make([]int64, r.bucketsCount)
-	a.New(r.bucketsCount)
 	return r
 }
 
 // Add
-func (r *RollingWindow) Add(n []int64) {
+func (r *RollingWindow) Add(n int64) {
 	now := time.Now().UnixNano()
-	offset := now >> r.ringPow
+	NewRound := now >> r.ringPow
 	pos := (int)(now&r.mask) >> r.bucketleghthPow
-	oldOffset := atomic.LoadInt64(&r.round[pos])
-	if oldOffset == offset {
-		r.array.Add(pos, n)
-	} else {
-		if atomic.CompareAndSwapInt64(&r.round[pos], oldOffset, offset) {
-			r.array.Store(pos, n)
-		} else {
-			r.array.Add(pos, n)
+	if atomic.LoadInt64(&r.round[pos]) == NewRound {
+		atomic.AddInt64(&r.array[pos], n)
+		return
+	}
+	var count int
+	for {
+		if atomic.CompareAndSwapInt64(&r.spinLock, 0, 1) {
+			if atomic.LoadInt64(&r.round[pos]) == NewRound {
+				atomic.AddInt64(&r.array[pos], n)
+			} else {
+				atomic.StoreInt64(&r.array[pos], n)
+				atomic.StoreInt64(&r.round[pos], NewRound)
+			}
+			atomic.StoreInt64(&r.spinLock, 0)
+			return
+		}
+		count++
+		if count > 10000 {
+			panic("RollingWindow.Add 自旋锁死锁")
 		}
 	}
+
+}
+
+// Store
+func (r *RollingWindow) Store(n int64) {
+	now := time.Now().UnixNano()
+	NewRound := now >> r.ringPow
+	pos := (int)(now&r.mask) >> r.bucketleghthPow
+	atomic.StoreInt64(&r.array[pos], n)
+	atomic.StoreInt64(&r.round[pos], NewRound)
 }
 
 func (r *RollingWindow) Sampling() []int {
