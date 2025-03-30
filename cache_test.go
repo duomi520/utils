@@ -10,7 +10,7 @@ func TestIdempotentCache(t *testing.T) {
 		return len(d)
 	}
 	ic := &IdempotentCache[[]byte]{}
-	ic.Init(12, 0x0102030405060708, 0, 0, nil, fn)
+	ic.Init(12, 0x0102030405060708, fn)
 	key1 := []byte("127.0.0.1")
 	key2 := []byte("192.168.0.1")
 	t.Log(ic.Get(key1))
@@ -35,7 +35,7 @@ func BenchmarkIdempotentCacheGet(b *testing.B) {
 		return compute
 	}
 	ic := &IdempotentCache[string]{}
-	ic.Init(5, 0x0102030405060708, 0, 0, nil, fn)
+	ic.Init(5, 0x0102030405060708, fn)
 	ic.Get("127.0.0.1")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
